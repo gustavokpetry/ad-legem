@@ -12,7 +12,6 @@ const store = {
   set(k,v){ try{ localStorage.setItem('leiseca:'+k, JSON.stringify(v)); }catch(e){ toast('Não foi possível salvar neste aparelho.'); } }
 };
 let saved = new Set(store.get('saved',[]));
-let srs = store.get('srs',{});
 // Pede ao navegador para não apagar os dados quando faltar espaço (sem perguntar nada na abertura).
 function askPersist(){
   if(askPersist.done || !navigator.storage || !navigator.storage.persist) return;
@@ -224,166 +223,316 @@ function applyFs(){
 }
 $('#sh-fs').onclick=()=>{ store.set('fs',(store.get('fs',0)+1)%3); applyFs(); toast(`Texto ${FS[store.get('fs',0)]}`); };
 
-/* ---------- fichas ---------- */
-const PRESETS=[
-  {id:'cf-fund',nome:'Princípios e direitos fundamentais',c:'cf',de:1,ate:17},
-  {id:'lindb',nome:'LINDB inteira',c:'lindb',de:1,ate:30},
-  {id:'cc-geral',nome:'Código Civil · Parte Geral',c:'cc',de:1,ate:232},
-  {id:'cp-geral',nome:'Código Penal · Parte Geral',c:'cp',de:1,ate:120},
+/* ---------- estudo: trilhas → lições (ler + perguntas) → revisão ---------- */
+const TRILHAS=[
+  {id:'lindb',   nome:'LINDB',                              sub:'Lei de Introdução, inteira', c:'lindb', de:1, ate:30},
+  {id:'cf-fund', nome:'Princípios e direitos fundamentais', sub:'CF, arts. 1º a 17',          c:'cf',    de:1, ate:17},
+  {id:'cc-geral',nome:'Código Civil · Parte Geral',         sub:'CC, arts. 1º a 232',         c:'cc',    de:1, ate:232},
+  {id:'cp-geral',nome:'Código Penal · Parte Geral',         sub:'CP, arts. 1º a 120',         c:'cp',    de:1, ate:120},
 ];
-const ROM=/^([IVXLC]+)\s*[-–—]/;
-function unitsOf(a){
-  if(a.r) return [];
-  const clean=t=>t.replace(/\*\([^)]*\)\*/g,'').trim();
-  if(a.t.length<=700) return [{id:a.id, a, sub:'', text:a.t}];
-  const blocks=a.t.split(/\n{2,}/); const units=[]; let u={sub:'caput',parts:[blocks[0]]};
-  for(const raw of blocks.slice(1)){
-    const b=raw.replace(/^\*\*/,'');
-    let m;
-    if((m=b.match(/^(§\s*\d+º?|Parágrafo único)/i))){ units.push(u); u={sub:m[1].replace(/\s+/,' ').toLowerCase().startsWith('par')?'parágrafo único':m[1].replace(/\s+/,' '),parts:[raw]}; }
-    else if((m=b.match(ROM))){ units.push(u); u={sub:'inciso '+m[1],parts:[raw]}; }
-    else u.parts.push(raw);
+const fullTrack=c=>({id:'all-'+c, nome:CODE[c].nome, sub:`${CODE[c].sigla}, completo`, c, de:0, ate:1e9});
+const trackById=id=>TRILHAS.find(t=>t.id===id) || (id&&id.startsWith('all-')&&CODE[id.slice(4)] ? fullTrack(id.slice(4)) : null);
+const plainTxt=t=>t.replace(/\*\([^)]*\)\*/g,'').replace(/\*+/g,'').replace(/[ \t]+/g,' ').trim();
+// bloco revogado: depois de tirar o rótulo (I -, § 2º, a)...), sobra só o aviso de revogação ou nada
+const LABEL_RE=/^(?:[IVXLC]+\s*[-–—]\s*|§\s*\d+º?\.?\s*|Parágrafo único\.?\s*|[a-z]\)\s*)/i;
+const isRevokedBlock=raw=>{ const b=raw.replace(/\*+/g,'').trim().replace(LABEL_RE,'').trim(); return !b || /^\(?\s*(revogad|vetad)/i.test(b) || !plainTxt(raw).replace(LABEL_RE,'').trim(); };
+
+// Um artigo vira um ou mais "itens de leitura"; artigos muito longos (ex.: art. 5º da CF) são divididos.
+function readingItems(a){
+  const raw=a.t.split(/\n{2,}/).filter(b=>b.trim());
+  const keep=raw.filter((b,i)=>i===0 || !isRevokedBlock(b));
+  if(!keep.length) return [];
+  const mk=(parts,k,sub)=>({key:a.id+(k?'#p'+k:''), a, raw:parts, blocks:parts.map(plainTxt), sub, part:0,
+    len:parts.reduce((s,p)=>s+p.length,0)});
+  const total=keep.reduce((s,p)=>s+p.length,0);
+  if(total<=1500) return [mk(keep,0,'')];
+  const items=[]; let cur=[keep[0]], size=keep[0].length;
+  const rom=b=>{ const m=plainTxt(b).match(/^([IVXLC]+)\s*[-–—]/); return m?m[1]:null; };
+  const label=parts=>{ const r=parts.map(rom).filter(Boolean); return r.length? (r.length>1?`incisos ${r[0]} a ${r[r.length-1]}`:`inciso ${r[0]}`) : ''; };
+  for(const b of keep.slice(1)){
+    if(size+b.length>1200 && cur.length){ items.push(cur); cur=[]; size=0; }
+    cur.push(b); size+=b.length;
   }
-  units.push(u);
-  return units.map((x,i)=>({id:a.id+'#'+i, a, sub:x.sub, text:x.parts.join('\n\n')}))
-    .filter(x=>clean(x.text.replace(/^\**[IVXLC]+\s*[-–—]\s*|^\**(§\s*\d+º?|Parágrafo único)\.?\**\s*/i,'')).replace(/^\(?revogad[oa].*$/i,'').length>12);
+  if(cur.length) items.push(cur);
+  return items.map((parts,k)=>{ const lb=label(parts); const r=parts.map(rom).filter(Boolean); const it=mk(parts,k, k?lb:(lb?'caput e '+lb:'caput')); it.part=k; it.r0=r[0]; it.r1=r[r.length-1]; if(k) it.caput=plainTxt(keep[0]); return it; });
 }
-const unitCache=new Map();
-function units(a){ let u=unitCache.get(a.id); if(!u){ u=unitsOf(a); unitCache.set(a.id,u); } return u; }
-function deckUnits(d){
-  const arts = d.saved ? [...saved].map(id=>BYID[id]).filter(Boolean) : BYCODE[d.c].filter(a=>a.k>=d.de && a.k<=d.ate);
-  return arts.flatMap(units);
+const lessonCache=new Map();
+function lessonsOf(t){
+  if(lessonCache.has(t.id)) return lessonCache.get(t.id);
+  const arts=BYCODE[t.c].filter(a=>a.k>=t.de && a.k<=t.ate && !a.r);
+  const items=arts.flatMap(readingItems);
+  const lessons=[]; let cur=null;
+  const headOf=it=>it.a.h||'';
+  for(const it of items){
+    const newHead = cur && headOf(it)!==headOf(cur.items[cur.items.length-1]);
+    if(!cur || cur.items.length>=5 || cur.len+it.len>3000 || (newHead && cur.items.length>=3)){
+      cur={items:[],len:0}; lessons.push(cur);
+    }
+    cur.items.push(it); cur.len+=it.len;
+  }
+  lessons.forEach((l,i)=>{
+    l.i=i;
+    const f=l.items[0].a, z=l.items[l.items.length-1].a;
+    l.title = lastHead(f.h) ? cap1(lastHead(f.h).toLowerCase()) : null;
+    const fi=l.items[0], zi=l.items[l.items.length-1];
+    if(f.id===z.id && fi.sub){
+      const a=fi.r0, b=zi.r1||zi.r0, inc = a ? (b&&b!==a ? `incisos ${a} a ${b}` : `inciso ${a}`) : '';
+      l.range = `art. ${f.n}, ${fi.part===0 ? (inc?'caput e '+inc:'caput') : (inc||zi.sub)}`;
+    } else l.range = f.id===z.id ? `art. ${f.n}` : `arts. ${f.n} a ${z.n}`;
+    if(!l.title) l.title=cap1(l.range);
+    l.minutes = Math.max(2, Math.round(l.len/900 + 1.5));
+  });
+  lessonCache.set(t.id,lessons);
+  return lessons;
 }
-function stats(us){
-  const now=Date.now(); let due=0,nw=0;
-  for(const u of us){ const s=srs[u.id]; if(!s) nw++; else if(s.due<=now) due++; }
-  return {due,nw,seen:us.length-nw,total:us.length};
+const cap1=s=>s.charAt(0).toUpperCase()+s.slice(1);
+
+function questionsFor(items, t, seed, max){
+  const labelsOf=it=>BYCODE[it.a.c];
+  const qs=[];
+  items.forEach(it=>{
+    const list=labelsOf(it), p=it.a.p;
+    const neighbors=list.slice(Math.max(0,p-4),p+5).filter(x=>!x.r).map(x=>'Art. '+x.n);
+    const genItem={id:it.key, c:it.a.c, n:it.a.n, label:'Art. '+it.a.n+(it.sub?', '+it.sub:''), blocks:it.blocks};
+    qs.push(...Perguntas.gerar(genItem,{max: items.length<=3?2:1, neighbors, seed, famous: it.part===0}));
+  });
+  // embaralha de forma estável e limita
+  const h=s=>{ let x=2166136261; for(const ch of s){ x^=ch.charCodeAt(0); x=Math.imul(x,16777619);} return x>>>0; };
+  return qs.sort((a,b)=>h(seed+a.id)-h(seed+b.id)).slice(0,max);
 }
-function unitById(id){ const art=BYID[id.split('#')[0]]; return art ? units(art).find(u=>u.id===id)||null : null; }
-function allDue(){
-  const now=Date.now();
-  return Object.keys(srs).filter(id=>srs[id] && srs[id].due<=now).sort((a,b)=>srs[a].due-srs[b].due).map(unitById).filter(Boolean);
-}
+
+/* progresso salvo */
+let trilhas=store.get('trilhas',{});          // { trilhaId: [índices de lições concluídas] }
+let rev=store.get('rev',{});                  // { idPergunta: { q, b, due } }
+let curTrack=store.get('cur',null);
+const IV=[1,3,7,16,35,80];                    // dias até a próxima revisão
+const day=864e5;
+const doneSet=id=>new Set(trilhas[id]||[]);
+function dueReviews(){ const now=Date.now(); return Object.values(rev).filter(r=>r&&r.q&&r.due<=now).sort((a,b)=>a.due-b.due); }
+function nextLesson(t){ const ls=lessonsOf(t), d=doneSet(t.id); return ls.find(l=>!d.has(l.i)) || null; }
 const plural=(n,a,b)=>`${n} ${n===1?a:b}`;
-const days=n=>n<=0?'agora':n===1?'amanhã':`em ${n} dias`;
-let mode=store.get('mode','texto');
-function renderDecks(){
+
+function trackRow(t){
+  const ls=lessonsOf(t), d=doneSet(t.id), n=ls.filter(l=>d.has(l.i)).length;
+  const pct=ls.length?Math.round(n/ls.length*100):0;
+  const act = n===0?'Começar':n===ls.length?'Concluída':'Continuar';
+  return `<button class="deck" data-track="${t.id}" aria-label="${esc(`${t.nome}. ${n} de ${ls.length} lições. ${act}`)}"><span class="dbody" aria-hidden="true">
+    <span class="dn">${esc(t.nome)}</span><span class="dm">${esc(t.sub)}</span>
+    <span class="bar"><i style="width:${pct}%"></i></span><span class="dm">${n} de ${plural(ls.length,'lição','lições')}</span></span>
+    <span class="act${act==='Concluída'?' fin':''}" aria-hidden="true">${act}</span></button>`;
+}
+function renderStudy(){
   if(!ARTS.length) return;
-  const due=allDue(); const started=Object.keys(srs).length>0;
-  $('#today').innerHTML = due.length
-    ? `<div class="tl">Para hoje</div><div class="tn">${plural(due.length,'ficha','fichas')} para revisar</div>
-       <p>São fichas que você já viu e que chegou a hora de relembrar.</p><button class="go big" id="go-due">Revisar agora</button>`
-    : started
-      ? `<div class="tl">Para hoje</div><div class="tn">Revisões em dia</div><p>Nenhuma ficha para revisar agora. Se quiser, comece fichas novas escolhendo um trecho abaixo.</p>`
-      : `<div class="tl">Primeira vez?</div><div class="tn">Escolha um trecho para começar</div><p>Sugestão para o 1º ano: comece pela LINDB, que é curta, ou pelos princípios fundamentais da Constituição.</p>`;
-  const decks=[{id:'saved',nome:'Meus grifos',saved:true}, ...PRESETS];
-  $('#decks').innerHTML = decks.map(d=>{
-    if(d.saved && !saved.size)
-      return `<div class="deck off"><span class="dbody"><span class="dn">Meus grifos</span><span class="dm">Ao ler um artigo, toque em Grifar e ele aparece aqui.</span></span></div>`;
-    const st=stats(deckUnits(d));
-    const sub=d.saved?plural(saved.size,'artigo grifado','artigos grifados'):`${CODE[d.c].sigla}, arts. ${d.de} a ${d.ate}`;
-    const pct=st.total?Math.round(st.seen/st.total*100):0;
-    const act = st.due ? `Revisar ${st.due}` : st.seen===0 ? 'Começar' : st.nw ? 'Continuar' : 'Concluído';
-    return `<button class="deck" data-deck="${d.id}" aria-label="${esc(`${d.nome}. ${sub}. ${st.seen} de ${st.total} fichas vistas. ${act}`)}"><span class="dbody" aria-hidden="true"><span class="dn">${esc(d.nome)}</span>
-      <span class="dm">${sub}</span>
-      <span class="bar"><i style="width:${pct}%"></i></span>
-      <span class="dm">${st.seen} de ${st.total} fichas já vistas</span></span>
-      <span class="act${st.due?' due':''}${act==='Concluído'?' fin':''}" aria-hidden="true">${act}</span></button>`;
-  }).join('');
-  document.querySelectorAll('.modes [data-mode]').forEach(b=>b.setAttribute('aria-checked',b.dataset.mode===mode));
-  if(!$('#cc-code').options.length) $('#cc-code').innerHTML = CODES.map(c=>`<option value="${c.id}">${c.sigla} · ${esc(c.nome)}</option>`).join('');
-}
-$('.modes').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(!b) return; mode=b.dataset.mode; store.set('mode',mode); renderDecks(); });
-$('#today').addEventListener('click',e=>{ if(e.target.closest('#go-due')) startSession({id:'due',nome:'Revisão do dia',due:true}); });
-$('#decks').addEventListener('click',e=>{
-  const b=e.target.closest('[data-deck]'); if(!b) return;
-  const id=b.dataset.deck; startSession(id==='saved'?{id,nome:'Meus grifos',saved:true}:PRESETS.find(p=>p.id===id));
-});
-$('#cc-go').onclick=()=>{
-  const c=$('#cc-code').value, x=+$('#cc-de').value||1, y=+$('#cc-ate').value||x;
-  const de=Math.min(x,y), ate=Math.max(x,y);
-  if(!deckUnits({c,de,ate}).length){ toast('Nenhum artigo nesse intervalo.'); return; }
-  $('#cc-de').blur(); $('#cc-ate').blur();
-  startSession({id:'custom',nome:`${CODE[c].sigla}, arts. ${de} a ${ate}`,c,de,ate});
-};
-let queue=[], done=0, total=0, shown=false, deckNow=null, tally=[0,0,0], inSession=false;
-const NEW_PER=15, IV=[0,1,3,7,16,35,80];
-function startSession(d){
-  deckNow=d; const now=Date.now();
-  if(d.due){ queue=allDue(); }
-  else {
-    const us=deckUnits(d);
-    const due=us.filter(u=>srs[u.id]&&srs[u.id].due<=now).sort((a,b)=>srs[a.id].due-srs[b.id].due);
-    queue=due.concat(us.filter(u=>!srs[u.id]).slice(0,NEW_PER));
-  }
-  done=0; total=queue.length; tally=[0,0,0]; missed.clear();
-  inSession=true; pushLayer('session');
-  $('#studyhome').hidden=true; $('#studyrun').hidden=false; showCard(); window.scrollTo(0,0);
-}
-function hideSession(){ if(!inSession) return; inSession=false; $('#studyrun').hidden=true; $('#studyhome').hidden=false; renderDecks(); window.scrollTo(0,0); }
-function endSession(){ hideSession(); dropLayer('session'); }
-function nextDays(u){ const b=(srs[u.id]||{b:0}).b; return [0, IV[Math.max(1,b)], IV[Math.min(IV.length-1,b+1)]]; }
-const X_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
-function showCard(){
-  const el=$('#studyrun');
-  const pos=Math.min(done+1,total);
-  const head=`<div class="studyhead"><button class="xbtn" id="st-back" aria-label="Sair do estudo">${X_ICON}</button><span>${esc(deckNow.nome)}</span></div>
-    <div class="sbar" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}" aria-label="Progresso da sessão"><i style="width:${total?Math.round(done/total*100):100}%"></i></div>
-    ${queue.length?`<div class="spos">Ficha ${pos} de ${total}${srs[queue[0].id]?' · revisão':' · nova'}</div>`:''}`;
-  if(!queue.length){
-    el.innerHTML = head + (total
-      ? `<div class="done study"><h2>FINIS</h2><q>Dura lex, sed lex.</q>
-         <p>Você terminou ${plural(total,'ficha','fichas')}: ${tally[2]} lembrou bem, ${tally[1]} com esforço e ${tally[0]} errou ao menos uma vez.</p>
-         <p>Elas voltam para revisão nos próximos dias, na tela inicial das fichas.</p><button class="go" id="st-back2">Voltar</button></div>`
-      : `<div class="done study"><h2>NIHIL HODIE</h2><p>Nada para estudar aqui agora: tudo deste trecho já está marcado para revisão em outro dia.</p><button class="go" id="st-back2">Voltar</button></div>`);
-    $('#st-back2').focus(); return;
-  }
-  const u=queue[0], a=u.a; shown=false;
-  const label=`Art. ${esc(a.n)}${u.sub?', '+esc(u.sub):''}`;
-  const where=a.h?esc(lastHead(a.h)):'';
-  const top=`<div class="ctop"><span class="sg">${CODE[a.c].sigla}</span><span class="sep">·</span>${esc(CODE[a.c].nome)}</div>`;
-  let front,back;
-  if(mode==='texto'){
-    front=`${top}<div class="cw">${where}</div><div class="cl">${label}</div><p class="ask">O que diz este dispositivo?</p>`;
-    back=`<div class="ans q lex">${fmt(u.text)}</div>`;
+  const t=trackById(curTrack)||TRILHAS[0];
+  const nl=nextLesson(t);
+  const due=dueReviews();
+  let html='';
+  if(nl){
+    const first=!curTrack;
+    html+=`<div class="tl">${first?'Comece por aqui':'Continuar'}</div>
+      <div class="tn">${esc(t.nome)}</div>
+      <p class="lsn">Lição ${nl.i+1} de ${lessonsOf(t).length} · ${esc(nl.title)}</p>
+      <p class="meta">${esc(nl.range)} · cerca de ${nl.minutes} min</p>
+      <button class="go big" data-start="${t.id}|${nl.i}">${first?'Começar a primeira lição':'Começar lição'}</button>`;
   } else {
-    front=`${top}<p class="ask" style="margin-top:.6rem">De qual artigo é este trecho?</p><div class="q lex">${fmt(u.text)}</div>`;
-    back=`<div class="ans"><div class="cw" style="margin:0">${where}</div><div class="cl" style="margin:0">${label}</div></div>`;
+    html+=`<div class="tl">Trilha concluída</div><div class="tn">${esc(t.nome)}</div><p class="meta">Escolha outra trilha abaixo para continuar.</p>`;
   }
-  const nd=nextDays(u);
-  el.innerHTML = head + `<div class="card">${front}<div id="st-back-face" hidden>${back}</div>
-    <div class="reveal" id="st-reveal"><button id="st-show">Ver a resposta</button></div>
-    <div class="rate" id="st-rate" hidden><div class="rq">Você lembrou?</div>
-      <button class="r0" data-r="0">Não lembrei<small>volta ${days(nd[0])}</small></button>
-      <button class="r1" data-r="1">Com esforço<small>volta ${days(nd[1])}</small></button>
-      <button class="r2" data-r="2">Lembrei bem<small>volta ${days(nd[2])}</small></button></div></div>`;
-  $('#st-show').focus();
+  if(due.length){
+    html+=`<div class="revbox"><div><b>Revisão do dia</b><span>${plural(Math.min(due.length,10),'pergunta','perguntas')} do que você já estudou</span></div><button class="go ghost" id="go-rev">Revisar</button></div>`;
+  }
+  $('#today').innerHTML=html;
+  $('#tracks').innerHTML=TRILHAS.map(trackRow).join('');
+  if($('#tracks-all').closest('details').open) $('#tracks-all').innerHTML=CODES.map(c=>trackRow(fullTrack(c.id))).join('');
+  $('#grifos').innerHTML = saved.size
+    ? `<button class="deck" id="go-grifos"><span class="dbody"><span class="dn">Praticar meus grifos</span><span class="dm">${plural(saved.size,'artigo grifado','artigos grifados')}</span></span><span class="act">Praticar</span></button>`
+    : `<p class="how">Ao ler um artigo na busca, toque em Grifar. Depois você pode praticar só os artigos grifados aqui.</p>`;
 }
-function reveal(){ if(shown) return; shown=true; $('#st-back-face').hidden=false; $('#st-reveal').hidden=true; $('#st-rate').hidden=false; $('#st-rate button').focus(); }
-const missed=new Set();
-function rate(r){
-  const u=queue.shift(); const s=srs[u.id]||{b:0,due:0}; const day=864e5, now=Date.now();
-  if(r===0){ s.b=0; s.due=now; missed.add(u.id); queue.splice(Math.min(3,queue.length),0,u); }
-  else { s.b = r===1 ? Math.max(1,s.b) : Math.min(IV.length-1,s.b+1); s.due=now+IV[s.b]*day; done++;
-    tally[missed.has(u.id)?0:r]++; missed.delete(u.id); }
-  srs[u.id]=s; store.set('srs',srs); askPersist(); showCard();
+$('#tracks-all').closest('details').addEventListener('toggle',e=>{ if(e.target.open && !$('#tracks-all').innerHTML) renderStudy(); });
+
+/* tela da trilha (lista de lições) */
+let trackOpen=null;
+function openTrack(id){
+  const t=trackById(id); if(!t) return;
+  trackOpen=t; pushLayer('track'); renderTrack(true);
+}
+function renderTrack(scroll){
+  const t=trackOpen; const ls=lessonsOf(t), d=doneSet(t.id), nx=nextLesson(t);
+  $('#trackview').innerHTML=`<div class="studyhead"><button class="backbtn" id="tr-back" aria-label="Voltar às trilhas">${BACK_ICON}</button><span>${esc(t.sub)}</span></div>
+    <h2>${esc(t.nome)}</h2>
+    <p class="how">${plural(ls.length,'lição','lições')} · ${ls.filter(l=>d.has(l.i)).length} concluídas</p>
+    <ol class="lessons">${ls.map(l=>`<li><button class="lesson${d.has(l.i)?' ok':''}${nx&&nx.i===l.i?' next':''}" data-start="${t.id}|${l.i}">
+      <span class="ln" aria-hidden="true">${d.has(l.i)?'✓':l.i+1}</span>
+      <span class="lt"><b>${esc(l.title)}</b><small>${esc(l.range)} · ${l.minutes} min${d.has(l.i)?' · concluída':''}${nx&&nx.i===l.i?' · próxima':''}</small></span></button></li>`).join('')}</ol>`;
+  $('#studyhome').hidden=true; $('#trackview').hidden=false; window.scrollTo(0,0);
+  const n=$('#trackview .lesson.next'); if(scroll && n && n.offsetTop>window.innerHeight*.6) n.scrollIntoView({block:'center'});
+}
+function hideTrack(){ if(!trackOpen) return; trackOpen=null; $('#trackview').hidden=true; if(!inSession){ $('#studyhome').hidden=false; renderStudy(); } }
+
+/* sessão: lição (ler → perguntas → resultado), revisão ou grifos */
+let S=null, inSession=false;
+const BACK_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+const X_ICON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+function startLesson(tid, li, reuse){
+  const t=trackById(tid); const l=t&&lessonsOf(t)[li]; if(!l) return;
+  curTrack=t.id; store.set('cur',curTrack);
+  S={kind:'lesson', t, l, title:`Lição ${l.i+1} · ${l.title}`, items:l.items, ri:0, phase:'read',
+     qs:questionsFor(l.items,t,t.id+'#'+l.i,8), qi:0, answers:[]};
+  if(reuse){ renderSession(); window.scrollTo(0,0); } else openSession();
+}
+function startReview(){
+  const due=dueReviews().slice(0,10).map(r=>r.q);
+  if(!due.length){ toast('Nada para revisar agora.'); return; }
+  S={kind:'review', title:'Revisão do dia', items:[], ri:0, phase:'quiz', qs:due, qi:0, answers:[]}; openSession();
+}
+function startGrifos(){
+  const items=[...saved].map(id=>BYID[id]).filter(Boolean).flatMap(readingItems);
+  const qs=questionsFor(items,null,'grifos'+Date.now().toString().slice(0,-5),10);
+  if(!qs.length){ toast('Os artigos grifados ainda não rendem perguntas. Grife mais alguns.'); return; }
+  S={kind:'grifos', title:'Meus grifos', items:[], ri:0, phase:'quiz', qs, qi:0, answers:[]}; openSession();
+}
+function openSession(){
+  inSession=true; pushLayer('session');
+  $('#studyhome').hidden=true; $('#trackview').hidden=true; $('#studyrun').hidden=false; renderSession();
+}
+function hideSession(){
+  if(!inSession) return; inSession=false; S=null;
+  $('#studyrun').hidden=true;
+  if(trackOpen) renderTrack(false); else { $('#studyhome').hidden=false; renderStudy(); }
+  window.scrollTo(0,0);
+}
+function endSession(){ hideSession(); dropLayer('session'); }
+
+function sessionHead(){
+  const nr=S.items.length, nq=S.qs.length, tot=nr+nq;
+  const pos = S.phase==='read' ? S.ri : S.phase==='quiz' ? nr+S.qi : tot;
+  const segs=Array.from({length:tot},(_,i)=>`<i class="${i<pos?'on':''}${i<nr?' rd':''}"></i>`).join('');
+  return `<div class="studyhead"><button class="xbtn" id="st-x" aria-label="Sair">${X_ICON}</button><span>${esc(S.title)}</span></div>
+    <div class="segs" role="progressbar" aria-valuemin="0" aria-valuemax="${tot}" aria-valuenow="${pos}" aria-label="Progresso">${segs}</div>`;
+}
+function renderSession(){
+  const el=$('#studyrun');
+  if(S.phase==='read'){
+    const it=S.items[S.ri], a=it.a, last=S.ri===S.items.length-1;
+    el.innerHTML=sessionHead()+`<div class="step">Leitura ${S.ri+1} de ${S.items.length}</div>
+      <article class="card read">
+        <div class="ctop"><span class="sg">${CODE[a.c].sigla}</span>${a.h?`<span class="sep">·</span>${esc(lastHead(a.h).toLowerCase())}`:''}</div>
+        <div class="cl">Art. ${esc(a.n)}${it.sub?`<small>${esc(it.sub)}</small>`:''}</div>
+        ${it.caput?`<p class="ctx">${esc(clip(it.caput,200))}</p>`:''}
+        <div class="q lex">${fmt(it.raw.join('\n\n'))}</div>
+      </article>
+      <div class="actions">${S.ri>0?`<button class="go ghost" id="rd-prev">Anterior</button>`:''}
+        <button class="go" id="rd-next">${!last?'Próximo artigo':S.qs.length?`Ir para as perguntas (${S.qs.length})`:'Concluir lição'}</button></div>`;
+    $('#rd-next').focus({preventScroll:true});
+    return;
+  }
+  if(S.phase==='quiz'){
+    const q=S.qs[S.qi], ans=S.answers[S.qi];
+    el.innerHTML=sessionHead()+`<div class="step">Pergunta ${S.qi+1} de ${S.qs.length}</div>`+questionHTML(q,ans)+
+      (ans?`<div class="actions"><button class="go" id="q-next">${S.qi<S.qs.length-1?'Continuar':'Ver resultado'}</button></div>`:'');
+    (ans?$('#q-next'):el.querySelector('.opt')).focus({preventScroll:true});
+    if(ans){ const fb=el.querySelector('.fb'); if(fb) requestAnimationFrame(()=>fb.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})); }
+    return;
+  }
+  // resultado
+  const ok=S.answers.filter(a=>a&&a.ok).length, n=S.qs.length;
+  const misses=S.qs.map((q,i)=>({q,a:S.answers[i]})).filter(x=>x.a&&!x.a.ok);
+  let nextBtn='';
+  if(S.kind==='lesson'){ const nx=nextLesson(S.t); nextBtn = nx?`<button class="go" data-start="${S.t.id}|${nx.i}">Próxima lição</button>`:''; }
+  el.innerHTML=sessionHead()+`<div class="done study">
+    <h2>${n?(ok===n?'OPTIME':'FINIS'):'FINIS'}</h2>
+    ${n?`<p class="score"><b>${ok}</b> de ${n} certas</p>`:`<p>Lição de leitura concluída.</p>`}
+    <q>${ok===n?'Dura lex, sed lex.':'Errando se aprende.'}</q>
+    ${misses.length?`<div class="misses"><h3>Para rever</h3>${misses.map(x=>`<p>${x.q.type==='artigo'?`<b>${esc(CODE[x.q.c].sigla)}</b>: `:`<b>${esc(CODE[x.q.c].sigla)}, ${esc(x.q.label)}</b>: `}${missLine(x.q)}</p>`).join('')}<p class="how">Essas perguntas voltam amanhã na revisão do dia.</p></div>`:''}
+    <div class="actions">${nextBtn}<button class="go ghost" id="st-done">Voltar</button></div></div>`;
+  ($('#studyrun [data-start]')||$('#st-done')).focus({preventScroll:true});
+}
+function clip(s,n){ if(s.length<=n) return s; const c=s.lastIndexOf(' ',n); return s.slice(0,c>40?c:n)+'…'; }
+function missLine(q){
+  if(q.type==='artigo') return `“${esc(clip(q.excerpt,70))}” é do ${esc(q.right)}.`;
+  return `o texto diz «${esc(q.right)}»${q.type==='vf'&&!q.truth?`, não «${esc(q.shown)}»`:''}.`;
+}
+function sentence(q,mid){ return `${q.pre}${esc(q.before)}${mid}${esc(q.after)}${q.post}`; }
+function questionHTML(q,ans){
+  const ctx=q.ctx?`<p class="ctx">${esc(q.ctx)}</p>`:'';
+  const head=`<div class="ctop"><span class="sg">${esc(CODE[q.c].nome)}</span>${q.type==='artigo'?'':`<span class="sep">·</span>${esc(q.label)}`}</div>`;
+  let body='', opts=[];
+  if(q.type==='vf'){
+    body=`<div class="kind">Certo ou errado?</div>${ctx}<p class="qtext">${sentence(q, ans? `<mark class="${q.truth?'good':'bad'}">${esc(q.shown)}</mark>` : `<span class="hot">${esc(q.shown)}</span>`)}</p>`;
+    opts=[['true','Certo'],['false','Errado']];
+  } else if(q.type==='lacuna'){
+    body=`<div class="kind">Complete</div>${ctx}<p class="qtext">${sentence(q, ans?`<mark class="good">${esc(q.right)}</mark>`:'<span class="blank" aria-label="lacuna">______</span>')}</p>`;
+    opts=q.options.map(o=>[o,o]);
+  } else {
+    body=`<div class="kind">Qual é o artigo?</div><p class="qtext">“${esc(q.excerpt)}”</p>`;
+    opts=q.options.map(o=>[o,o]);
+  }
+  const correctVal = q.type==='vf' ? String(q.truth) : q.right;
+  const buttons=opts.map(([v,lbl],i)=>{
+    let cls='opt';
+    if(ans){ if(v===correctVal) cls+=' right'; else if(v===ans.v) cls+=' wrong'; else cls+=' dim'; }
+    return `<button class="${cls}" data-v="${esc(v)}" ${ans?'disabled':''}><span class="k" aria-hidden="true">${i+1}</span>${esc(lbl)}</button>`;
+  }).join('');
+  let fb='';
+  if(ans){
+    const art=BYID[q.art.split('#')[0]];
+    fb=`<div class="fb ${ans.ok?'ok':'no'}" role="status"><b>${ans.ok?'Correto.':'Não é isso.'}</b> ${
+      q.type==='vf' ? (q.truth?'O trecho está exatamente como na lei.':`A lei diz «${esc(q.right)}», não «${esc(q.shown)}».`)
+      : q.type==='lacuna' ? `A palavra da lei é «${esc(q.right)}».` : `É o ${esc(q.right)}.`}
+      ${art?` <button class="linkbtn" data-art="${esc(art.id)}">Ler o artigo inteiro</button>`:''}</div>`;
+  }
+  return `<article class="card quiz">${head}${body}<div class="opts${q.type==='vf'?' two':''}">${buttons}</div>${fb}</article>`;
+}
+function answer(v){
+  const q=S.qs[S.qi]; if(S.answers[S.qi]) return;
+  const ok = q.type==='vf' ? String(q.truth)===v : v===q.right;
+  S.answers[S.qi]={v,ok};
+  const r=rev[q.id]||{q,b:-1,due:0}; r.q=q;
+  if(ok){ r.b=Math.min(IV.length-1,r.b+1); r.due=Date.now()+IV[r.b]*day; }
+  else { r.b=-1; r.due=Date.now()+day; }
+  rev[q.id]=r; store.set('rev',rev); askPersist();
+  renderSession();
+}
+function nextStep(){
+  if(S.phase==='read'){
+    if(S.ri<S.items.length-1){ S.ri++; }
+    else if(S.qs.length){ S.phase='quiz'; S.qi=0; }
+    else { finishLesson(); S.phase='result'; }
+  } else if(S.phase==='quiz'){
+    if(S.qi<S.qs.length-1) S.qi++; else { finishLesson(); S.phase='result'; }
+  }
+  renderSession(); window.scrollTo(0,0);
+}
+function finishLesson(){
+  if(S.kind!=='lesson') return;
+  const d=doneSet(S.t.id); d.add(S.l.i); trilhas[S.t.id]=[...d]; store.set('trilhas',trilhas);
 }
 $('#studyrun').addEventListener('click',e=>{
+  e.stopPropagation();   // a tela é redesenhada; sem isso o clique "vaza" para o tratador da aba
   const t=e.target;
-  if(t.closest('#st-back,#st-back2')) return endSession();
-  if(t.closest('#st-show')) return reveal();
-  const r=t.closest('[data-r]'); if(r) rate(+r.dataset.r);
+  if(t.closest('#st-x,#st-done')) return endSession();
+  if(t.closest('#rd-next')) return nextStep();
+  if(t.closest('#rd-prev')){ S.ri=Math.max(0,S.ri-1); renderSession(); window.scrollTo(0,0); return; }
+  if(t.closest('#q-next')) return nextStep();
+  const o=t.closest('.opt'); if(o && !o.disabled) return answer(o.dataset.v);
+  const la=t.closest('[data-art]'); if(la) return openArt(BYID[la.dataset.art]);
+  const st=t.closest('[data-start]'); if(st){ const [tid,li]=st.dataset.start.split('|'); startLesson(tid,+li,true); }
+});
+$('#v-estudar').addEventListener('click',e=>{
+  const st=e.target.closest('[data-start]'); if(st){ const [tid,li]=st.dataset.start.split('|'); startLesson(tid,+li); return; }
+  const tr=e.target.closest('[data-track]'); if(tr){ openTrack(tr.dataset.track); return; }
+  if(e.target.closest('#tr-back')){ hideTrack(); dropLayer('track'); return; }
+  if(e.target.closest('#go-rev')) return startReview();
+  if(e.target.closest('#go-grifos')) return startGrifos();
 });
 document.addEventListener('keydown',e=>{
-  if(!inSession || !$('#sheet').hidden) return;
-  if(e.target.matches('input,textarea,select')) return;
-  if((e.key===' '||e.key==='Enter') && !shown && queue.length && !e.target.closest('button')){ e.preventDefault(); reveal(); }
-  else if(shown && ['1','2','3'].includes(e.key)) rate(+e.key-1);
+  if(!inSession || !$('#sheet').hidden || e.target.matches('input,textarea,select')) return;
+  if(S.phase==='quiz' && !S.answers[S.qi] && /^[1-4]$/.test(e.key)){ const o=$$('#studyrun .opt')[+e.key-1]; if(o) answer(o.dataset.v); }
 });
+const $$=s=>[...document.querySelectorAll(s)];
 
 /* ---------- backup do progresso ---------- */
 $('#bk-save').onclick=async()=>{
-  const body=JSON.stringify({app:'ad-legem',versao:1,salvo_em:new Date().toISOString(),saved:[...saved],srs,mode},null,0);
+  const body=JSON.stringify({app:'ad-legem',versao:2,salvo_em:new Date().toISOString(),saved:[...saved],trilhas,rev,cur:curTrack});
   const name=`ad-legem-progresso-${new Date().toISOString().slice(0,10)}.json`;
   const file=new File([body],name,{type:'application/json'});
   try{
@@ -398,14 +547,15 @@ $('#bk-file').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{
     const d=JSON.parse(await f.text());
-    if(d.app!=='ad-legem' || !Array.isArray(d.saved) || typeof d.srs!=='object' || !d.srs) throw new Error();
-    const n=Object.keys(d.srs).length;
-    if(!confirm(`Restaurar a cópia de ${new Date(d.salvo_em).toLocaleDateString('pt-BR')}? Ela tem ${d.saved.length} grifos e ${n} fichas, e substitui o progresso atual deste aparelho.`)) return;
+    if(d.app!=='ad-legem' || !Array.isArray(d.saved)) throw new Error();
+    const nT=Object.values(d.trilhas||{}).reduce((s,x)=>s+(Array.isArray(x)?x.length:0),0);
+    if(!confirm(`Restaurar a cópia de ${new Date(d.salvo_em).toLocaleDateString('pt-BR')}? Ela tem ${d.saved.length} grifos e ${nT} lições concluídas, e substitui o progresso atual deste aparelho.`)) return;
     saved=new Set(d.saved.filter(id=>typeof id==='string'));
-    srs={}; for(const [k,v] of Object.entries(d.srs)) if(v && typeof v.b==='number' && typeof v.due==='number') srs[k]={b:v.b,due:v.due};
-    if(d.mode==='texto'||d.mode==='numero') mode=d.mode;
-    store.set('saved',[...saved]); store.set('srs',srs); store.set('mode',mode); askPersist();
-    renderDecks(); toast('Progresso restaurado.');
+    trilhas={}; for(const [k,v] of Object.entries(d.trilhas||{})) if(Array.isArray(v)) trilhas[k]=v.filter(Number.isInteger);
+    rev={}; for(const [k,v] of Object.entries(d.rev||{})) if(v && v.q && typeof v.due==='number') rev[k]={q:v.q,b:+v.b||0,due:v.due};
+    curTrack=typeof d.cur==='string'?d.cur:null;
+    store.set('saved',[...saved]); store.set('trilhas',trilhas); store.set('rev',rev); store.set('cur',curTrack); askPersist();
+    renderStudy(); toast('Progresso restaurado.');
   }catch(err){ toast('Este arquivo não é uma cópia válida do Ad Legem.'); }
 };
 
@@ -428,6 +578,7 @@ window.addEventListener('popstate',()=>{
   const name=layers.pop();
   if(name==='sheet') hideSheet();
   else if(name==='session') hideSession();
+  else if(name==='track') hideTrack();
   else if(name==='estudar') showView('buscar');
   else if(name==='results'){ $('#q').value=''; active=allCodes(); renderTabs(); page=1; runSearch(); window.scrollTo(0,0); }
 });
@@ -439,22 +590,25 @@ function syncResultsLayer(){
 function showView(v){
   ['buscar','estudar'].forEach(x=>$('#v-'+x).hidden = x!==v);
   document.querySelectorAll('[data-go]').forEach(b=>{ if(b.classList.contains('mark')) return; const on=b.dataset.go===v; b.setAttribute('aria-current', on?'page':'false'); const s=b.querySelector('span'); if(s) s.className=on?'hl':''; });
-  if(v==='estudar' && $('#studyhome') && !$('#studyhome').hidden) renderDecks();
+  if(v==='estudar' && !$('#studyhome').hidden) renderStudy();
   window.scrollTo(0,0);
 }
 function go(v){
   if(v==='estudar'){
     if(inSession) return;                              // já está estudando
+    if(trackOpen){ hideTrack(); dropLayer('track'); }  // tocar em Estudar volta para o início da aba
     if(!layers.includes('estudar')) pushLayer('estudar');
     showView('estudar');
   } else {
-    if(inSession){ hideSession(); }
+    if(inSession){ inSession=false; S=null; $('#studyrun').hidden=true; }
+    if(trackOpen){ trackOpen=null; $('#trackview').hidden=true; }
+    $('#studyhome').hidden=false;
     const i=layers.indexOf('estudar'); if(i>=0) dropLayer('estudar');
     showView('buscar');
   }
 }
 function goHome(){
-  hideSheet(); hideSession();
+  hideSheet(); inSession=false; S=null; trackOpen=null; $('#studyrun').hidden=true; $('#trackview').hidden=true; $('#studyhome').hidden=false;
   if(layers.length){ const n=layers.length; layers.length=0; skipPops++; history.go(-n); }
   $('#q').value=''; if(CODES.length){ active=allCodes(); renderTabs(); }
   showView('buscar'); page=1; runSearch();

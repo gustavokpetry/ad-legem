@@ -55,35 +55,30 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
     <div id="studyhome">
       <div class="today" id="today"></div>
 
-      <h3 class="sect">Escolha o que estudar</h3>
-      <div class="decks" id="decks"></div>
+      <h3 class="sect">Trilhas do 1º ano</h3>
+      <div class="decks" id="tracks"></div>
+
       <details class="other">
-        <summary>Escolher outros artigos</summary>
-        <div class="custom">
-          <label>Código<select id="cc-code"></select></label>
-          <label>Do artigo<input id="cc-de" type="number" min="1" value="1" inputmode="numeric"></label>
-          <label>Até o artigo<input id="cc-ate" type="number" min="1" value="20" inputmode="numeric"></label>
-          <button class="go" id="cc-go">Estudar estes artigos</button>
-        </div>
+        <summary>Outras trilhas: códigos completos</summary>
+        <div class="decks" id="tracks-all"></div>
       </details>
 
-      <h3 class="sect">Como a ficha aparece</h3>
-      <div class="modes" role="radiogroup" aria-label="Como a ficha aparece">
-        <button role="radio" data-mode="texto"><b>Vejo o número, lembro o texto</b><span>A ficha mostra “Art. 2º” e você tenta lembrar o que ele diz.</span></button>
-        <button role="radio" data-mode="numero"><b>Vejo o texto, lembro o número</b><span>A ficha mostra o trecho da lei e você tenta lembrar qual artigo é.</span></button>
-      </div>
+      <h3 class="sect">Meus grifos</h3>
+      <div id="grifos"></div>
 
-      <h3 class="sect">Seus dados</h3>
-      <p class="how">O progresso e os grifos ficam salvos só neste aparelho. Salve uma cópia de vez em quando, ou para passar para outro celular.</p>
-      <div class="bk">
-        <button class="go" id="bk-save">Salvar uma cópia</button>
-        <button class="go ghost" id="bk-load">Restaurar uma cópia</button>
-        <input type="file" id="bk-file" accept="application/json,.json" hidden>
-      </div>
-
-      <h3 class="sect">Como funciona</h3>
-      <p class="how">Você lê a ficha, tenta lembrar e vira. Depois diz se lembrou. O que você não lembrou volta na mesma sessão; o que lembrou volta daqui a alguns dias, cada vez mais espaçado. Cada sessão traz no máximo 15 fichas novas.</p>
+      <details class="other help">
+        <summary>Como funciona e backup</summary>
+        <p class="how">Cada trilha é dividida em lições curtas. Em cada lição você lê alguns artigos e responde perguntas rápidas sobre eles: certo ou errado, completar a palavra que falta e, nos artigos mais conhecidos, dizer qual é o artigo. O que você errar volta no dia seguinte, na revisão do dia; o que acertar volta em alguns dias, cada vez mais espaçado.</p>
+        <p class="how">As perguntas são geradas automaticamente a partir do texto da lei. Confira sempre o artigo inteiro quando tiver dúvida.</p>
+        <p class="how">O progresso e os grifos ficam salvos só neste aparelho. Salve uma cópia de vez em quando, ou para passar para outro celular.</p>
+        <div class="bk">
+          <button class="go" id="bk-save">Salvar uma cópia</button>
+          <button class="go ghost" id="bk-load">Restaurar uma cópia</button>
+          <input type="file" id="bk-file" accept="application/json,.json" hidden>
+        </div>
+      </details>
     </div>
+    <div id="trackview" hidden></div>
     <div id="studyrun" hidden></div>
   </section>
 </main>
@@ -109,6 +104,7 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="perguntas.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>
