@@ -1,5 +1,5 @@
 // Ad Legem — funciona offline. Ao atualizar o index.html, aumente a versão abaixo.
-const VERSION = 'ad-legem-v1';
+const VERSION = 'ad-legem-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
