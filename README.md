@@ -17,14 +17,14 @@ Funciona offline e pode ser instalado na tela inicial. Publicado no GitHub Pages
 ## Atualizar o texto das leis
 
 1. `python3 scripts/gerar_dados.py` (só precisa do Python 3, sem bibliotecas extras)
-2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v7` → `ad-legem-v8`)
+2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v8` → `ad-legem-v9`)
 3. Faça o commit de `data.json` e `sw.js`
 
 Para incluir outra lei, acrescente uma linha em `CODIGOS` no script.
 
 ## Dados salvos no aparelho
 
-Grifos, trechos estudados, revisões e as configurações ficam no `localStorage`
+Grifos (por dispositivo, com cor), trechos estudados, revisões e as configurações ficam no `localStorage`
 (prefixo `leiseca:`). Em Configurações (ícone de três riscos) há "Salvar uma cópia", "Restaurar uma cópia" e "Apagar lições e revisões".
 
 Fonte dos textos: https://github.com/ctresb/leis. Os textos têm caráter
@@ -54,3 +54,11 @@ e ficha catalográfica (configurações).
 Aumente juntos, com o mesmo número: `VERSION` no `sw.js`, `data-build` no `<html>` do
 `index.html` e `BUILD` no início do `app.js`. Se o celular juntar arquivos de versões
 diferentes, o app percebe, limpa o cache de arquivos e recarrega sozinho (o progresso não é apagado).
+
+## Grifos e paletas
+
+- Grifo é por dispositivo (caput, inciso, parágrafo, alínea): chave `artigo|bloco` em `marks`,
+  com a cor (`y`, `g`, `p`) e a data. Os nomes das cores ficam em `markNames` e podem ser trocados
+  nas configurações. A aba Grifos lista, filtra, copia a citação e gera a prova com os trechos.
+- Paletas: Clássico, Grafite, Marinho, Bordô e Sépia, definidas em `styles.css` (`data-palette`),
+  cada uma com versão clara e escura. O selo é desenhado em linha com as cores da paleta.

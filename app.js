@@ -5,7 +5,7 @@
 'use strict';
 // HTML e JS precisam ser da mesma versão. Se o cache juntou versões diferentes, limpa só o
 // cache de arquivos (o progresso fica no localStorage e não é tocado) e recarrega uma vez.
-const BUILD='7';
+const BUILD='8';
 if(document.documentElement.dataset.build!==BUILD){
   let tried=false; try{ tried=sessionStorage.getItem('adl-fix')===BUILD; sessionStorage.setItem('adl-fix',BUILD); }catch(e){}
   if(!tried){
@@ -25,7 +25,22 @@ const store = {
   get(k,d){ try{ const v=localStorage.getItem('leiseca:'+k); return v!==null?JSON.parse(v):d; }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem('leiseca:'+k, JSON.stringify(v)); }catch(e){ toast('Não foi possível salvar neste aparelho.'); } }
 };
-let saved = new Set(store.get('saved',[]));
+// Grifos por dispositivo: chave "artigo|bloco" (bloco 0 = caput) → { c: cor (y|g|p), at: data }.
+let marks = store.get('marks',null) || {};
+const MARK_COLORS=['y','g','p'];
+const MARK_DEFAULT={y:'Importante',g:'Cai em prova',p:'Dúvida'};
+let markNames = Object.assign({},MARK_DEFAULT,store.get('markNames',{}));
+const markKey=(artId,b)=>artId+'|'+b;
+const artOfKey=k=>k.slice(0,k.lastIndexOf('|'));
+const marksOf=artId=>Object.keys(marks).filter(k=>artOfKey(k)===artId);
+const hasMarks=artId=>{ for(const k in marks) if(artOfKey(k)===artId) return true; return false; };
+function saveMarks(){ store.set('marks',marks); }
+// grifos antigos (artigo inteiro) viram o caput grifado em amarelo
+(function migrateSaved(){
+  if(store.get('marks',null)) return;
+  const old=store.get('saved',[]);
+  if(Array.isArray(old) && old.length){ old.forEach(id=>{ if(typeof id==='string') marks[markKey(id,0)]={c:'y',at:0}; }); saveMarks(); }
+})();
 function askPersist(){
   if(askPersist.done || !navigator.storage || !navigator.storage.persist) return;
   askPersist.done=true;
@@ -41,6 +56,7 @@ const SET={
   notes:   store.get('notes',false),
   qmax:    store.get('qmax',8),
   qartigo: store.get('qartigo',true),
+  palette: store.get('palette','classico'),   // classico, grafite, marinho, bordo, sepia
 };
 function setOpt(k,v){ SET[k]=v; store.set(k,v); applyLook(); refreshViews(); }
 
@@ -79,7 +95,20 @@ const roman=n=>ROMANS[n]||String(n);
 
 // Corpo do artigo no formato de página de livro: capitular, incisos com o numeral na margem,
 // notas de redação como notas de rodapé numeradas.
-function pageBody(blocks, dropcap){
+// Rótulo de um dispositivo para citação: "", "XI", "§ 2º", "parágrafo único", "alínea a".
+function blockLabel(raw,i){
+  if(i===0) return '';
+  const b=plainTxt(raw); let m;
+  if((m=b.match(/^([IVXLC]+)\s*[-–—]/))) return m[1];
+  if((m=b.match(/^([a-z])\)/))) return 'alínea '+m[1];
+  if((m=b.match(/^§\s*(\d+º?)/))) return '§ '+m[1];
+  if(/^Parágrafo único/i.test(b)) return 'parágrafo único';
+  return '';
+}
+const citation=(a,i)=>{ const l=blockLabel(a.t.split(/\n{2,}/)[i]||'',i); return `${CODE[a.c].sigla}, art. ${a.n}${l?', '+l:''}`; };
+// Corpo do artigo no formato de página de livro: capitular, incisos com o numeral na margem,
+// notas de redação como notas de rodapé. Com artId, cada dispositivo pode ser tocado para grifar.
+function pageBody(blocks, dropcap, artId){
   const notes=[];
   const inl=s=>{
     s=esc(s);
@@ -88,22 +117,25 @@ function pageBody(blocks, dropcap){
     return s.replace(/\s+(<sup)/g,'$1').trim();
   };
   const out=[]; let first=true;
-  for(const raw of blocks){
-    const b=raw.trim(); if(!b) continue;
+  blocks.forEach((raw,bi)=>{
+    const b=raw.trim(); if(!b) return;
     if(!first && isRevokedBlock(b)){
-      if(SET.hiderev) continue;
+      if(SET.hiderev) return;
       const lab=(plainTxt(b).match(LABEL_RE)||[''])[0].replace(/[-–—]\s*$/,'').trim();
-      out.push(`<p class="revk">${esc(lab)} <em>revogado</em></p>`); continue;
+      out.push(`<p class="revk">${esc(lab)} <em>revogado</em></p>`); return;
     }
+    const mk = artId ? marks[markKey(artId,bi)] : null;
+    const at = artId ? ` data-b="${bi}" tabindex="0" aria-label="${esc((mk?`Grifado, ${markNames[mk.c]}. `:'Tocar para grifar. ')+clip(plainTxt(b),80))}"` : '';
+    const mc = artId ? ` blk${mk?' mk mk-'+mk.c:''}` : '';
     const bare=b.replace(/^\*\*([^*]+)\*\*\s*/,'$1 ');
     let m;
-    if((m=bare.match(/^([IVXLC]+)\s*[-–—]\s*/))) out.push(`<div class="inc"><span class="num">${m[1]}</span><span>${inl(bare.slice(m[0].length))}</span></div>`);
-    else if((m=bare.match(/^([a-z])\)\s*/))) out.push(`<div class="inc al"><span class="num">${m[1]})</span><span>${inl(bare.slice(m[0].length))}</span></div>`);
-    else if((m=bare.match(/^(§\s*\d+º?\.?|Parágrafo único\.?)\s*/i))) out.push(`<p class="par"><span class="plabel">${esc(m[1].replace(/\.$/,''))}.</span> ${inl(bare.slice(m[0].length))}</p>`);
-    else if(first && dropcap && /^[A-Za-zÀ-ÿ]/.test(bare)){ out.push(`<p class="caput"><span class="dropcap" aria-hidden="true">${esc(bare[0])}</span><span class="vh">${esc(bare[0])}</span>${inl(bare.slice(1))}</p>`); }
-    else out.push(`<p>${inl(bare)}</p>`);
+    if((m=bare.match(/^([IVXLC]+)\s*[-–—]\s*/))) out.push(`<div class="inc${mc}"${at}><span class="num">${m[1]}</span><span>${inl(bare.slice(m[0].length))}</span></div>`);
+    else if((m=bare.match(/^([a-z])\)\s*/))) out.push(`<div class="inc al${mc}"${at}><span class="num">${m[1]})</span><span>${inl(bare.slice(m[0].length))}</span></div>`);
+    else if((m=bare.match(/^(§\s*\d+º?\.?|Parágrafo único\.?)\s*/i))) out.push(`<p class="par${mc}"${at}><span class="plabel">${esc(m[1].replace(/\.$/,''))}.</span> ${inl(bare.slice(m[0].length))}</p>`);
+    else if(first && dropcap && /^[A-Za-zÀ-ÿ]/.test(bare)) out.push(`<p class="caput${mc}"${at}><span class="dropcap" aria-hidden="true">${esc(bare[0])}</span><span class="vh">${esc(bare[0])}</span>${inl(bare.slice(1))}</p>`);
+    else out.push(`<p class="${mc.trim()}"${at}>${inl(bare)}</p>`);
     first=false;
-  }
+  });
   return {html:out.join(''), notes};
 }
 // Página inteira de um artigo (ou de um trecho de artigo longo, numa lição).
@@ -112,7 +144,7 @@ function articleHTML(a, item, titleId){
   const lv=S.find(s=>/^(LIVRO|PARTE)/i.test(s.label||s.title)) || S[0];
   const rhL=CODE[a.c].nome + (lv && lv!==L ? ' · '+(lv.label||lv.title) : '');
   const rhR=S.length>=2 ? S[S.length-2].title : '';
-  const body=pageBody(item?item.raw:a.t.split(/\n{2,}/), !item || item.part===0);
+  const body=pageBody(item?item.raw:a.t.split(/\n{2,}/), !item || item.part===0, item?null:a.id);
   return `<div class="runhead"><span>${esc(rhL.toLowerCase())}</span><span>${esc(rhR.toLowerCase())}</span></div>
     ${L?`<div class="chap"><span class="chl">${esc(L.label)}</span><span class="cht">${esc(sentence(L.title))}</span></div>`:''}
     <h2 class="artno"${titleId?` id="${titleId}"`:''}>Art. ${esc(a.n)}${item&&item.sub?`<small>${esc(item.sub)}</small>`:''}</h2>
@@ -192,11 +224,11 @@ function setFilter(c){
 $('#tabs').addEventListener('click',e=>{ const b=e.target.closest('.tab'); if(b && ARTS.length) setFilter(b.dataset.c); });
 
 function artCard(a,toks){
-  const label=`${CODE[a.c].sigla}, artigo ${a.n}${a.r?', revogado':''}${saved.has(a.id)?', grifado':''}. ${(a._p||'').slice(0,90)}`;
+  const label=`${CODE[a.c].sigla}, artigo ${a.n}${a.r?', revogado':''}${hasMarks(a.id)?', grifado':''}. ${(a._p||'').slice(0,90)}`;
   return `<button class="art${a.r?' rev':''}" data-id="${esc(a.id)}" aria-label="${esc(label)}" style="--cc:${cc(a.c)}">
     <span class="mg" aria-hidden="true"><span class="chip">${CODE[a.c].sigla}</span><span class="an">${esc(a.n)}</span></span>
     <span aria-hidden="true">${a.h?`<span class="where">${esc(lastHead(a.h))}</span>`:''}
-    <span class="snip">${snippet(a,toks||[])}</span>${a.r||saved.has(a.id)?`<span class="tag">${a.r?'revogado':''}${a.r&&saved.has(a.id)?' · ':''}${saved.has(a.id)?'grifado':''}</span>`:''}</span></button>`;
+    <span class="snip">${snippet(a,toks||[])}</span>${a.r||hasMarks(a.id)?`<span class="tag">${a.r?'revogado':''}${a.r&&hasMarks(a.id)?' · ':''}${hasMarks(a.id)?'grifado':''}</span>`:''}</span></button>`;
 }
 let page=1, lastList=[], lastToks=[], lastHead_='';
 function renderList(list,toks,head){
@@ -282,13 +314,10 @@ function hideSheet(){
   if(!$('#v-buscar').hidden && lastList.length && $('#q').value.trim()){ const y=window.scrollY; renderList(lastList,lastToks,lastHead_); window.scrollTo(0,y); }
 }
 function closeArt(){ hideSheet(); dropLayer('sheet'); }
-function setSave(){
-  const on=!!(cur&&saved.has(cur.id)); const b=$('#sh-save');
-  b.setAttribute('aria-pressed',on); b.querySelector('span').textContent=on?'Grifado':'Grifar';
-  $('#pg-ribbon').hidden=!on;
-}
+function setSave(){ $('#pg-ribbon').hidden=!(cur && hasMarks(cur.id)); }
 $('#sh-close').onclick=closeArt;
 document.addEventListener('keydown',e=>{
+  if(!$('#marksheet').hidden){ if(e.key==='Escape') closeMarkSheet(); return; }
   if($('#sheet').hidden) return;
   if(e.key==='Escape') closeArt();
   if(e.key==='ArrowLeft' && cur && cur.p>0) openArt(BYCODE[cur.c][cur.p-1]);
@@ -296,11 +325,36 @@ document.addEventListener('keydown',e=>{
 });
 $('#sh-prev').onclick=()=>{ if(cur&&cur.p>0) openArt(BYCODE[cur.c][cur.p-1]); };
 $('#sh-next').onclick=()=>{ if(cur&&cur.p<BYCODE[cur.c].length-1) openArt(BYCODE[cur.c][cur.p+1]); };
-$('#sh-save').onclick=()=>{
-  if(!cur) return;
-  if(saved.has(cur.id)){ saved.delete(cur.id); toast('Grifo removido.'); } else { saved.add(cur.id); toast('Grifado. Ele entra em Meus grifos.'); askPersist(); }
-  store.set('saved',[...saved]); setSave();
-};
+$('#sh-body').addEventListener('click',e=>{ const b=e.target.closest('[data-b]'); if(b && cur) openMarkSheet(cur, +b.dataset.b); });
+$('#sh-body').addEventListener('keydown',e=>{ const b=e.target.closest('[data-b]'); if(b && cur && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); openMarkSheet(cur, +b.dataset.b); } });
+
+/* ---------- paleta de grifo (vale para a página e para a aba Grifos) ---------- */
+let markTarget=null;
+function openMarkSheet(a, bi, onDone){
+  markTarget={a,bi,onDone};
+  const k=markKey(a.id,bi), mk=marks[k];
+  $('#ms-title').textContent=citation(a,bi);
+  $('#ms-colors').innerHTML=MARK_COLORS.map(c=>`<button class="ms-c" data-mc="${c}" aria-pressed="${!!(mk&&mk.c===c)}"><span class="sw-dot mk-${c}" aria-hidden="true"></span>${esc(markNames[c])}</button>`).join('');
+  $('#ms-remove').hidden=!mk;
+  if($('#marksheet').hidden){ pushLayer('mark'); $('#marksheet').hidden=false; }
+  $('#ms-colors button').focus({preventScroll:true});
+}
+function hideMarkSheet(){ if($('#marksheet').hidden) return; $('#marksheet').hidden=true; const t=markTarget; markTarget=null; return t; }
+function closeMarkSheet(){ const t=hideMarkSheet(); dropLayer('mark'); return t; }
+function applyMark(c){
+  const t=closeMarkSheet(); if(!t) return;
+  const k=markKey(t.a.id,t.bi);
+  if(c){ const isNew=!marks[k]; marks[k]={c,at:(marks[k]&&marks[k].at)||Date.now()}; toast(`Grifado: ${markNames[c]}`); askPersist(); }
+  else { delete marks[k]; toast('Grifo removido.'); }
+  saveMarks();
+  if(cur && cur.id===t.a.id && !$('#sheet').hidden){ const y=$('#pg-scroll').scrollTop; openArt(cur); $('#pg-scroll').scrollTop=y; const el=$(`#sh-body [data-b="${t.bi}"]`); if(el) el.focus({preventScroll:true}); }
+  if(t.onDone) t.onDone();
+}
+$('#marksheet').addEventListener('click',e=>{
+  if(e.target.id==='marksheet' || e.target.closest('#ms-cancel')) return closeMarkSheet();
+  const b=e.target.closest('[data-mc]'); if(b) return applyMark(b.dataset.mc);
+  if(e.target.closest('#ms-remove')) return applyMark(null);
+});
 $('#sh-fs').onclick=()=>{ setOpt('fs',(SET.fs+1)%3); toast(['Texto normal','Texto grande','Texto maior'][SET.fs]); };
 
 /* ---------- estudo ---------- */
@@ -433,17 +487,13 @@ function renderStudy(){
   const ticket = due.length ? `<button class="ticket" id="go-rev"><span class="tk-n" aria-hidden="true">${nrev}</span>
       <span class="tk-t"><b>Revisão do dia</b><span>${plural(nrev,'pergunta','perguntas')} do que você já estudou</span></span>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>` : '';
-  const grifos = saved.size
-    ? `<button class="ticket" id="go-grifos"><span class="tk-n" aria-hidden="true">${saved.size}</span><span class="tk-t"><b>Praticar meus grifos</b><span>perguntas sobre ${plural(saved.size,'o artigo grifado','os artigos grifados')}</span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>`
-    : `<p class="how">Ao ler um artigo, toque em Grifar. Depois você pode praticar só os artigos grifados aqui.</p>`;
   $('#studyhome').innerHTML = `<div class="dateline">${DIAS[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}</div>
     <h1 class="studyh">Caderno de estudos</h1>
     ${cont}${ticket}
     <div class="rule-label"><span>MATÉRIAS DO 1º ANO</span></div>
     <div class="covers">${TRILHAS.map(coverHTML).join('')}</div>
     <details class="more-mat" id="more-mat"${moreOpen?' open':''}><summary>Outras matérias: códigos completos</summary>
-      <div class="covers" id="tracks-all">${moreOpen?CODES.map(c=>coverHTML(fullTrack(c.id))).join(''):''}</div></details>
-    <div class="rule-label"><span>MEUS GRIFOS</span></div>${grifos}`;
+      <div class="covers" id="tracks-all">${moreOpen?CODES.map(c=>coverHTML(fullTrack(c.id))).join(''):''}</div></details>`;
   $('#more-mat').addEventListener('toggle',e=>{ moreOpen=e.target.open; if(moreOpen && !$('#tracks-all').innerHTML) $('#tracks-all').innerHTML=CODES.map(c=>coverHTML(fullTrack(c.id))).join(''); });
 }
 
@@ -492,11 +542,19 @@ function startReview(){
   if(!due.length){ toast('Nada para revisar agora.'); return; }
   S={kind:'review', title:'Revisão do dia', kicker:'Caderno de estudos', items:[], ri:0, phase:'quiz', qs:due, qi:0, answers:[]}; openSession();
 }
-function startGrifos(){
-  const items=[...saved].map(id=>BYID[id]).filter(Boolean).flatMap(readingItems);
+// Prova só com os trechos grifados (os do filtro atual da aba Grifos).
+function startMarksPractice(keys){
+  const items=[];
+  keys.forEach(k=>{
+    const a=BYID[artOfKey(k)]; if(!a) return;
+    const raw=a.t.split(/\n{2,}/), bi=+k.slice(k.lastIndexOf('|')+1);
+    const parts = bi===0 ? [raw[0]] : [raw[0], raw[bi]].filter(Boolean);
+    items.push({key:k, a, raw:parts, blocks:parts.map(plainTxt), sub:blockLabel(raw[bi]||'',bi), part:bi===0?0:1, len:0});
+  });
   const qs=questionsFor(items,null,'grifos'+new Date().toDateString(),Math.max(SET.qmax,10));
-  if(!qs.length){ toast('Os artigos grifados ainda não rendem perguntas. Grife mais alguns.'); return; }
-  S={kind:'grifos', title:'Meus grifos', kicker:'Caderno de estudos', items:[], ri:0, phase:'quiz', qs, qi:0, answers:[]}; openSession();
+  if(!qs.length){ toast('Esses trechos ainda não rendem perguntas. Grife mais alguns.'); return; }
+  go('estudar');
+  S={kind:'grifos', title:'Meus grifos', kicker:'Grifos', items:[], ri:0, phase:'quiz', qs, qi:0, answers:[]}; openSession();
 }
 function openSession(){ inSession=true; pushLayer('session'); $('#studyhome').hidden=true; $('#trackview').hidden=true; $('#studyrun').hidden=false; renderSession(); window.scrollTo(0,0); }
 function hideSession(){
@@ -629,11 +687,71 @@ $('#v-estudar').addEventListener('click',e=>{
   const tr=e.target.closest('[data-track]'); if(tr){ openTrack(tr.dataset.track); return; }
   if(e.target.closest('#tr-back')){ hideTrack(); dropLayer('track'); return; }
   if(e.target.closest('#go-rev')) return startReview();
-  if(e.target.closest('#go-grifos')) return startGrifos();
 });
 document.addEventListener('keydown',e=>{
   if(!inSession || !S || !$('#sheet').hidden || !$('#settings').hidden || e.target.matches('input,textarea,select')) return;
   if(S.phase==='quiz' && !S.answers[S.qi] && /^[1-4]$/.test(e.key)){ const o=$$('#studyrun [data-v]')[+e.key-1]; if(o) answer(o.dataset.v); }
+});
+
+/* ---------- aba Grifos: o fichário de recortes ---------- */
+const GF={sort:'lei', color:'*', code:'*'};
+function fmtDate(t){ if(!t) return ''; const d=new Date(t); return `${d.getDate()} de ${MESES[d.getMonth()]}`; }
+function markList(){
+  const list=Object.entries(marks).map(([k,v])=>{ const a=BYID[artOfKey(k)]; if(!a) return null; return {k, a, bi:+k.slice(k.lastIndexOf('|')+1), c:v.c, at:v.at||0}; }).filter(Boolean);
+  const codeOrder=Object.fromEntries(CODES.map((c,i)=>[c.id,i]));
+  return list.sort(GF.sort==='lei' ? (x,y)=>(codeOrder[x.a.c]-codeOrder[y.a.c]) || (x.a.p-y.a.p) || (x.bi-y.bi) : (x,y)=>(y.at-x.at) || (x.a.p-y.a.p));
+}
+const filteredMarks=()=>markList().filter(m=>(GF.color==='*'||m.c===GF.color)&&(GF.code==='*'||m.a.c===GF.code));
+function clipHTML(m){
+  const raw=m.a.t.split(/\n{2,}/)[m.bi]||'';
+  const text=plainTxt(raw).replace(LABEL_RE,'').trim();
+  const where=citation(m.a,m.bi).replace(/^[^,]+,\s*art\./,'Art.');
+  return `<article class="clip" style="--cc:${cc(m.a.c)}">
+    <div class="cl-h"><span class="chip">${esc(CODE[m.a.c].sigla)}</span><b>${esc(where)}</b>${m.at?`<span class="cl-d">${fmtDate(m.at)}</span>`:''}</div>
+    <p class="cl-t"><span class="mk mk-${m.c}">${esc(text)}</span></p>
+    <div class="cl-a">
+      <button data-gact="open" data-k="${esc(m.k)}">Abrir artigo</button>
+      <button data-gact="copy" data-k="${esc(m.k)}">Copiar citação</button>
+      <button data-gact="edit" data-k="${esc(m.k)}" aria-label="${esc(markNames[m.c])}: trocar cor ou remover"><span class="sw-dot mk-${m.c}" aria-hidden="true"></span>${esc(markNames[m.c])}</button>
+    </div></article>`;
+}
+function renderGrifos(){
+  if(!ARTS.length) return;
+  const all=markList();
+  if(GF.code!=='*' && !all.some(m=>m.a.c===GF.code)) GF.code='*';
+  const shown=filteredMarks();
+  const codes=[...new Set(all.map(m=>m.a.c))];
+  const chip=(grp,val,label,on,extra='')=>`<button class="fchip" data-gf="${grp}" data-val="${val}" aria-pressed="${on}">${extra}${label}</button>`;
+  let body='';
+  if(!all.length){
+    body=`<div class="empty"><p>Nenhum grifo ainda.</p><p class="how">Abra um artigo e toque num trecho (caput, inciso ou parágrafo) para grifar.</p></div>`;
+  } else if(!shown.length){
+    body=`<p class="how">Nenhum grifo com esse filtro.</p>`;
+  } else if(GF.sort==='lei'){
+    let last=null;
+    body=shown.map(m=>{ const h = m.a.c!==last ? `<div class="codehead sm" style="--cc:${cc(m.a.c)}"><span class="ch-n">${esc(CODE[m.a.c].nome)}</span></div>` : ''; last=m.a.c; return h+clipHTML(m); }).join('');
+  } else body=shown.map(clipHTML).join('');
+  $('#v-grifos').innerHTML=`<h1 class="studyh">Grifos</h1>
+    ${all.length?`<p class="gf-count">${all.length} ${all.length===1?'trecho grifado':'trechos grifados'}</p>
+    <div class="gf-ctrl">
+      <div class="seg sm" role="radiogroup" aria-label="Ordem">${['lei','rec'].map(v=>`<button role="radio" data-gf="sort" data-val="${v}" aria-checked="${GF.sort===v}">${v==='lei'?'Ordem da lei':'Recentes'}</button>`).join('')}</div>
+      <div class="fchips" role="group" aria-label="Filtrar por cor">${chip('color','*','Todas',GF.color==='*')}${MARK_COLORS.map(c=>chip('color',c,esc(markNames[c]),GF.color===c,`<span class="sw-dot mk-${c}" aria-hidden="true"></span>`)).join('')}</div>
+      ${codes.length>1?`<div class="fchips" role="group" aria-label="Filtrar por código">${chip('code','*','Todos',GF.code==='*')}${codes.map(c=>chip('code',c,esc(CODE[c].sigla),GF.code===c)).join('')}</div>`:''}
+    </div>`:''}
+    <div class="clips">${body}</div>
+    ${shown.length?`<div class="actions"><button class="go" id="gf-practice">Praticar ${shown.length===1?'este grifo':`estes ${shown.length} grifos`}</button></div>`:''}`;
+}
+$('#v-grifos').addEventListener('click',async e=>{
+  const f=e.target.closest('[data-gf]'); if(f){ GF[f.dataset.gf]=f.dataset.val; renderGrifos(); return; }
+  if(e.target.closest('#gf-practice')) return startMarksPractice(filteredMarks().map(m=>m.k));
+  const b=e.target.closest('[data-gact]'); if(!b) return;
+  const k=b.dataset.k, a=BYID[artOfKey(k)], bi=+k.slice(k.lastIndexOf('|')+1); if(!a) return;
+  if(b.dataset.gact==='open'){ openArt(a); requestAnimationFrame(()=>{ const el=$(`#sh-body [data-b="${bi}"]`); if(el) el.scrollIntoView({block:'center'}); }); }
+  else if(b.dataset.gact==='edit') openMarkSheet(a,bi,renderGrifos);
+  else if(b.dataset.gact==='copy'){
+    const txt=`“${plainTxt(a.t.split(/\n{2,}/)[bi]||'').replace(LABEL_RE,'').trim()}” (${citation(a,bi)})`;
+    try{ await navigator.clipboard.writeText(txt); toast('Citação copiada.'); }catch(err){ toast('Não foi possível copiar.'); }
+  }
 });
 
 /* ---------- configurações (a ficha) ---------- */
@@ -645,6 +763,7 @@ function renderSettings(){
     else { const v=el.dataset.val; const on = k==='theme' ? v===th : String(SET[k])===v; el.setAttribute('aria-checked',on); }
   });
   $('#set-date').textContent=dataDate();
+  $$('#settings [data-markname]').forEach(inp=>{ if(document.activeElement!==inp) inp.value=markNames[inp.dataset.markname]; });
 }
 function openSettings(){
   if(!$('#settings').hidden) return;
@@ -664,8 +783,14 @@ $('#settings').addEventListener('click',e=>{
   const b=e.target.closest('button[data-set]'); if(!b) return;
   const k=b.dataset.set, v=b.dataset.val;
   if(k==='theme') setOpt('theme', v==='auto'?null:v);
+  else if(k==='palette') setOpt('palette', v);
   else setOpt(k, +v);
   renderSettings();
+});
+$('#settings').addEventListener('input',e=>{
+  const inp=e.target.closest('[data-markname]'); if(!inp) return;
+  const c=inp.dataset.markname, v=inp.value.trim().slice(0,24);
+  markNames[c]=v||MARK_DEFAULT[c]; store.set('markNames',markNames);
 });
 $('#settings').addEventListener('change',e=>{
   const c=e.target.closest('input[type=checkbox][data-set]'); if(!c) return;
@@ -683,7 +808,7 @@ function legacyToKeys(trilhasObj){
   return keys;
 }
 $('#bk-save').onclick=async()=>{
-  const body=JSON.stringify({app:'ad-legem',versao:3,salvo_em:new Date().toISOString(),saved:[...saved],estudados:[...estudados],rev,cur:curTrack});
+  const body=JSON.stringify({app:'ad-legem',versao:4,salvo_em:new Date().toISOString(),marks,markNames,estudados:[...estudados],rev,cur:curTrack});
   const name=`ad-legem-progresso-${new Date().toISOString().slice(0,10)}.json`;
   const file=new File([body],name,{type:'application/json'});
   try{ if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:'Progresso do Ad Legem'}); return; } }
@@ -697,14 +822,17 @@ $('#bk-file').onchange=async e=>{
   const f=e.target.files[0]; e.target.value=''; if(!f) return;
   try{
     const d=JSON.parse(await f.text());
-    if(d.app!=='ad-legem' || !Array.isArray(d.saved)) throw new Error();
+    if(d.app!=='ad-legem' || !(d.marks || Array.isArray(d.saved))) throw new Error();
+    const newMarks={};
+    if(d.marks && typeof d.marks==='object'){ for(const [k,v] of Object.entries(d.marks)) if(v && MARK_COLORS.includes(v.c) && k.includes('|')) newMarks[k]={c:v.c,at:+v.at||0}; }
+    else d.saved.forEach(id=>{ if(typeof id==='string') newMarks[markKey(id,0)]={c:'y',at:0}; });
     const keys = Array.isArray(d.estudados) ? new Set(d.estudados.filter(x=>typeof x==='string')) : legacyToKeys(d.trilhas);
-    if(!confirm(`Restaurar a cópia de ${new Date(d.salvo_em).toLocaleDateString('pt-BR')}? Ela tem ${d.saved.length} grifos e substitui o progresso atual deste aparelho.`)) return;
-    saved=new Set(d.saved.filter(id=>typeof id==='string'));
+    if(!confirm(`Restaurar a cópia de ${new Date(d.salvo_em).toLocaleDateString('pt-BR')}? Ela tem ${Object.keys(newMarks).length} grifos e substitui o progresso atual deste aparelho.`)) return;
+    marks=newMarks; if(d.markNames) markNames=Object.assign({},MARK_DEFAULT,d.markNames);
     estudados=keys;
     rev={}; for(const [k,v] of Object.entries(d.rev||{})) if(v && v.q && typeof v.due==='number') rev[k]={q:v.q,b:+v.b||0,due:v.due};
     curTrack=typeof d.cur==='string'?d.cur:null;
-    store.set('saved',[...saved]); store.set('estudados',[...estudados]); store.set('rev',rev); store.set('cur',curTrack); askPersist();
+    saveMarks(); store.set('markNames',markNames); store.set('estudados',[...estudados]); store.set('rev',rev); store.set('cur',curTrack); askPersist();
     refreshViews(); toast('Progresso restaurado.');
   }catch(err){ toast('Este arquivo não é uma cópia válida do Ad Legem.'); }
 };
@@ -730,11 +858,12 @@ function dropLayer(name){
 window.addEventListener('popstate',()=>{
   if(skipPops){ skipPops--; if(!skipPops && pendingPush.length){ pendingPush.forEach(n=>history.pushState({adl:n},'')); pendingPush=[]; } return; }
   const name=layers.pop();
-  if(name==='sheet') hideSheet();
+  if(name==='mark') hideMarkSheet();
+  else if(name==='sheet') hideSheet();
   else if(name==='settings') hideSettings();
   else if(name==='session') hideSession();
   else if(name==='track') hideTrack();
-  else if(name==='estudar') showView('buscar');
+  else if(name==='tab') showView('buscar');
   else if(name==='results'){ $('#q').value=''; active=allCodes(); renderTabs(); page=1; runSearch(); window.scrollTo(0,0); }
 });
 function syncResultsLayer(){
@@ -742,28 +871,31 @@ function syncResultsLayer(){
   if(on && !layers.includes('results')) pushLayer('results');
   else if(!on && layers[layers.length-1]==='results') dropLayer('results');
 }
+let curView='buscar';
 function showView(v){
-  ['buscar','estudar'].forEach(x=>$('#v-'+x).hidden = x!==v);
+  curView=v;
+  ['buscar','estudar','grifos'].forEach(x=>$('#v-'+x).hidden = x!==v);
   $$('[data-go]').forEach(b=>{ if(b.classList.contains('mark')) return; const on=b.dataset.go===v; b.setAttribute('aria-current', on?'page':'false'); const s=b.querySelector('span'); if(s) s.className=on?'hl':''; });
   if(v==='estudar' && !$('#studyhome').hidden) renderStudy();
+  if(v==='grifos') renderGrifos();
   window.scrollTo(0,0);
 }
+// Estudar e Grifos ficam numa entrada "tab" do histórico, acima da busca: o voltar leva à busca.
 function go(v){
-  if(v==='estudar'){
-    if(inSession) return;
-    if(trackOpen){ hideTrack(); dropLayer('track'); }
-    if(!layers.includes('estudar')) pushLayer('estudar');
-    showView('estudar');
-  } else {
+  if(v==='estudar' && inSession && curView==='estudar') return;
+  if(v!=='estudar' || !inSession){
     if(inSession){ inSession=false; S=null; $('#studyrun').hidden=true; }
     if(trackOpen){ trackOpen=null; $('#trackview').hidden=true; }
     $('#studyhome').hidden=false;
-    if(layers.indexOf('estudar')>=0) dropLayer('estudar');
-    showView('buscar');
   }
+  const i=layers.indexOf('tab');
+  if(v==='buscar'){ if(i>=0) dropLayer('tab'); }
+  else if(i<0) pushLayer('tab');
+  else if(i<layers.length-1) dropLayer(layers[i+1]);
+  showView(v);
 }
 function goHome(){
-  hideSheet(); hideSettings(); inSession=false; S=null; trackOpen=null;
+  hideMarkSheet(); hideSheet(); hideSettings(); inSession=false; S=null; trackOpen=null;
   $('#studyrun').hidden=true; $('#trackview').hidden=true; $('#studyhome').hidden=false;
   if(layers.length){ const n=layers.length; layers.length=0; skipPops++; history.go(-n); }
   $('#q').value=''; if(CODES.length){ active=allCodes(); renderTabs(); }
@@ -780,13 +912,32 @@ function applyLook(){
   root.classList.toggle('isdark',dark);
   $$('meta[name="theme-color"]').forEach(m=>{ m.content = dark?'#0F1A15':'#FCFBF8'; });
   root.dataset.fs=Math.max(0,Math.min(2,SET.fs|0));
+  root.dataset.palette=SET.palette||'classico';
 }
+// O selo é desenhado em linha, com as cores da paleta escolhida.
+let SEAL=null;
+function swapSeals(){
+  if(!SEAL) return;
+  $$('img[src="seal.svg"]').forEach(img=>{
+    const t=document.createElement('template');
+    t.innerHTML=SEAL.replace('<svg ',`<svg class="seal ${img.className}" width="${img.getAttribute('width')||''}" height="${img.getAttribute('height')||''}" ${img.alt?`role="img" aria-label="${esc(img.alt)}"`:'aria-hidden="true"'} `);
+    img.replaceWith(t.content.firstElementChild);
+  });
+}
+fetch('seal.svg').then(r=>r.ok?r.text():null).then(t=>{
+  if(!t) return;
+  SEAL=t.replace(/<\?xml[^>]*>/,'').replace(/ width="\d+" height="\d+"/,'').replace(/#0F4A33/gi,'var(--seal-bg)').replace(/#C9A13B/gi,'var(--seal-ring)').replace(/#F4EDD8/gi,'var(--seal-ink)');
+  swapSeals();
+  new MutationObserver(()=>{ if(document.querySelector('img[src="seal.svg"]')) swapSeals(); }).observe(document.body,{childList:true,subtree:true});
+}).catch(()=>{});
+
 if(mq.addEventListener) mq.addEventListener('change',applyLook);
 // Redesenha o que estiver na tela depois de mudar uma configuração.
 function refreshViews(){
   if(!ARTS.length) return;
   if(!$('#sheet').hidden && cur) openArt(cur);
   if(!$('#v-buscar').hidden){ const y=window.scrollY; if($('#q').value.trim()||filtered()) runSearch(); else intro(); window.scrollTo(0,y); }
+  if(!$('#v-grifos').hidden) renderGrifos();
   if(!$('#v-estudar').hidden){
     if(inSession && S) renderSession();
     else if(trackOpen) renderTrack(false);

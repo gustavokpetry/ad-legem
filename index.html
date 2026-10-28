@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-build="7">
+<html lang="pt-BR" data-build="8">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -17,7 +17,7 @@
 <script>
 /* aplica tema e tamanho de texto antes de desenhar a tela (evita piscar) */
 try{var d=document.documentElement,t=JSON.parse(localStorage.getItem('leiseca:theme')),f=JSON.parse(localStorage.getItem('leiseca:fs'));
-if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)d.classList.add('isdark');if(f)d.dataset.fs=f;}catch(e){}
+var pl=JSON.parse(localStorage.getItem('leiseca:palette'));if(pl)d.dataset.palette=pl;if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches)d.classList.add('isdark');if(f)d.dataset.fs=f;}catch(e){}
 </script>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -26,7 +26,7 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
   <div class="wrap bar">
     <a class="mark" href="./" data-go="buscar" aria-label="Ad Legem, voltar ao início"><img src="seal.svg" alt="" width="30" height="30"><span>AD LEGEM</span></a>
     <nav class="nav" aria-label="Seções">
-      <button data-go="buscar"><span>Buscar</span></button><button data-go="estudar"><span>Estudar</span></button>
+      <button data-go="buscar"><span>Buscar</span></button><button data-go="estudar"><span>Estudar</span></button><button data-go="grifos"><span>Grifos</span></button>
     </nav>
     <button class="menubtn" id="menubtn" aria-label="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   </div>
@@ -50,10 +50,12 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
     <div id="trackview" hidden></div>
     <div id="studyrun" hidden></div>
   </section>
+
+  <section class="view" id="v-grifos" hidden></section>
 </main>
 
 <nav class="bnav" aria-label="Seções">
-  <button data-go="buscar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span>Buscar</span></button><button data-go="estudar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6.5" width="13" height="14" rx="1"/><path d="M7.5 3.5h12a1 1 0 0 1 1 1v13"/></svg><span>Estudar</span></button>
+  <button data-go="buscar"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span>Buscar</span></button><button data-go="estudar"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6.5" width="13" height="14" rx="1"/><path d="M7.5 3.5h12a1 1 0 0 1 1 1v13"/></svg><span>Estudar</span></button><button data-go="grifos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5l4 4-9 9H6.5v-4z"/><path d="M4 21h16"/><path d="M13 7l4 4"/></svg><span>Grifos</span></button>
 </nav>
 
 <div class="pageview" id="sheet" role="dialog" aria-modal="true" aria-labelledby="pg-title" hidden>
@@ -61,7 +63,7 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
   <div class="pg-bar">
     <button class="circ cc" id="sh-close" aria-label="Fechar o artigo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <button class="circ" id="sh-fs" aria-label="Mudar o tamanho do texto">A<small>A</small></button>
-    <button class="grifar" id="sh-save" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10v17l-5-3.6-5 3.6z"/></svg><span>Grifar</span></button>
+    <span class="pg-hint">toque num trecho para grifar</span>
   </div>
   <div class="pg-scroll" id="pg-scroll">
     <div class="pg-inner" id="sh-body"></div>
@@ -81,6 +83,7 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
       <div class="fi-head"><span>AD LEGEM</span><span>FICHA DE PREFERÊNCIAS</span></div>
 
       <section class="fi-sec" aria-labelledby="fs-ap"><h3 id="fs-ap">Aparência</h3>
+        <div class="fi-row"><span class="fi-l">Cores</span><div class="palettes" role="radiogroup" aria-label="Cores do app"><button role="radio" data-set="palette" data-val="classico" class="pal pal-classico"><span class="pal-dot" aria-hidden="true"></span>Clássico</button><button role="radio" data-set="palette" data-val="grafite" class="pal pal-grafite"><span class="pal-dot" aria-hidden="true"></span>Grafite</button><button role="radio" data-set="palette" data-val="marinho" class="pal pal-marinho"><span class="pal-dot" aria-hidden="true"></span>Marinho</button><button role="radio" data-set="palette" data-val="bordo" class="pal pal-bordo"><span class="pal-dot" aria-hidden="true"></span>Bordô</button><button role="radio" data-set="palette" data-val="sepia" class="pal pal-sepia"><span class="pal-dot" aria-hidden="true"></span>Sépia</button></div></div>
         <div class="fi-row"><span class="fi-l">Tema</span><div class="seg" role="radiogroup" aria-label="Tema"><button role="radio" data-set="theme" data-val="auto">Automático</button><button role="radio" data-set="theme" data-val="light">Claro</button><button role="radio" data-set="theme" data-val="dark">Escuro</button></div></div>
         <div class="fi-row"><span class="fi-l">Tamanho do texto</span><div class="seg" role="radiogroup" aria-label="Tamanho do texto"><button role="radio" data-set="fs" data-val="0">A</button><button role="radio" data-set="fs" data-val="1">A+</button><button role="radio" data-set="fs" data-val="2">A++</button></div>
           <p class="fi-prev">Toda pessoa é capaz de direitos e deveres na ordem civil.</p></div>
@@ -90,6 +93,8 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
         <label class="sw"><span class="sw-t">Ocultar revogados</span><input type="checkbox" role="switch" data-set="hiderev"><span class="knob" aria-hidden="true"></span></label>
         <label class="sw"><span class="sw-t">Notas de redação</span><input type="checkbox" role="switch" data-set="notes"><span class="knob" aria-hidden="true"></span></label>
       </section>
+
+      <section class="fi-sec" aria-labelledby="fs-gr"><h3 id="fs-gr">Cores dos grifos</h3><label class="mkname"><span class="sw-dot mk-y" aria-hidden="true"></span><span class="vh">Nome da cor amarela</span><input type="text" maxlength="24" data-markname="y" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-g" aria-hidden="true"></span><span class="vh">Nome da cor verde</span><input type="text" maxlength="24" data-markname="g" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-p" aria-hidden="true"></span><span class="vh">Nome da cor rosa</span><input type="text" maxlength="24" data-markname="p" autocomplete="off"></label></section>
 
       <section class="fi-sec" aria-labelledby="fs-es"><h3 id="fs-es">Estudo</h3>
         <div class="fi-row"><span class="fi-l">Questões por lição</span><div class="seg" role="radiogroup" aria-label="Questões por lição"><button role="radio" data-set="qmax" data-val="5">5</button><button role="radio" data-set="qmax" data-val="8">8</button><button role="radio" data-set="qmax" data-val="10">10</button></div></div>
@@ -115,6 +120,13 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
   </div>
 </div>
 
+<div class="marksheet" id="marksheet" hidden>
+  <div class="ms-panel" role="dialog" aria-modal="true" aria-labelledby="ms-title">
+    <div class="ms-k">GRIFAR</div><div class="ms-t" id="ms-title"></div>
+    <div class="ms-colors" id="ms-colors"></div>
+    <div class="ms-row"><button class="danger-link" id="ms-remove">Remover grifo</button><button class="ms-cancel" id="ms-cancel">Cancelar</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="perguntas.js" defer></script>
 <script src="app.js" defer></script>
