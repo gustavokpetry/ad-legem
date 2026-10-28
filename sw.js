@@ -1,6 +1,6 @@
 // Ad Legem — service worker: deixa o app funcionando offline.
 // Ao publicar mudanças, aumente VERSION (ad-legem-v5, v5…) para limpar o cache antigo.
-const VERSION = 'ad-legem-v5';
+const VERSION = 'ad-legem-v6';
 const CORE = [
   './', './index.html', './styles.css', './app.js', './perguntas.js', './data.json', './manifest.webmanifest',
   './seal.svg', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png',
@@ -8,7 +8,11 @@ const CORE = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
+  // cache: 'reload' busca direto no servidor: sem isso, o cache HTTP (10 min no GitHub Pages)
+  // podia colocar arquivos da versão anterior dentro do cache novo.
+  e.waitUntil(caches.open(VERSION)
+    .then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -21,7 +25,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(caches.open(VERSION).then(async cache => {
     const hit = await cache.match(req, { ignoreSearch: true });
-    const net = fetch(req).then(res => {
+    const net = fetch(req, { cache: 'no-cache' }).then(res => {   // confere com o servidor (ETag)
       if (res && res.ok) cache.put(req, res.clone());
       return res;
     }).catch(() => hit || Response.error());

@@ -17,7 +17,7 @@ Funciona offline e pode ser instalado na tela inicial. Publicado no GitHub Pages
 ## Atualizar o texto das leis
 
 1. `python3 scripts/gerar_dados.py` (só precisa do Python 3, sem bibliotecas extras)
-2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v3` → `ad-legem-v4`)
+2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v6` → `ad-legem-v7`)
 3. Faça o commit de `data.json` e `sw.js`
 
 Para incluir outra lei, acrescente uma linha em `CODIGOS` no script.
@@ -48,3 +48,9 @@ Cada código tem uma cor de couro (`LEATHER` em `app.js`), usada na lombada, na 
 na capa do caderno e na trilha. Cada tela tem sua metáfora: estante (busca), página de
 livro (artigo), caderno e trilha (estudo), folha de prova (questões), certidão (resultado)
 e ficha catalográfica (configurações).
+
+## Ao publicar uma versão nova do app
+
+Aumente juntos, com o mesmo número: `VERSION` no `sw.js`, `data-build` no `<html>` do
+`index.html` e `BUILD` no início do `app.js`. Se o celular juntar arquivos de versões
+diferentes, o app percebe, limpa o cache de arquivos e recarrega sozinho (o progresso não é apagado).
