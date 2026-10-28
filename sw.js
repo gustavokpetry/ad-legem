@@ -1,6 +1,6 @@
 // Ad Legem — service worker: deixa o app funcionando offline.
-// Ao publicar mudanças, aumente VERSION (ad-legem-v4, v5…) para limpar o cache antigo.
-const VERSION = 'ad-legem-v4';
+// Ao publicar mudanças, aumente VERSION (ad-legem-v5, v5…) para limpar o cache antigo.
+const VERSION = 'ad-legem-v5';
 const CORE = [
   './', './index.html', './styles.css', './app.js', './perguntas.js', './data.json', './manifest.webmanifest',
   './seal.svg', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png',

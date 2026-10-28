@@ -7,7 +7,7 @@ Funciona offline e pode ser instalado na tela inicial. Publicado no GitHub Pages
 
 - `index.html`: estrutura das telas
 - `styles.css`: visual (tema claro e escuro)
-- `app.js`: busca, painel do artigo, trilhas e lições, revisão, botão voltar, backup
+- `app.js`: estante e busca, página do artigo, caderno/trilhas/lições/prova/certidão, configurações, botão voltar, backup
 - `perguntas.js`: gera as perguntas das lições a partir do texto da lei (regras, sem IA)
 - `data.json`: texto das leis, gerado pelo script abaixo
 - `sw.js`: cache offline · `manifest.webmanifest` + ícones: instalação como app
@@ -24,8 +24,8 @@ Para incluir outra lei, acrescente uma linha em `CODIGOS` no script.
 
 ## Dados salvos no aparelho
 
-Grifos, lições concluídas, revisões, tema e tamanho do texto ficam no `localStorage`
-(prefixo `leiseca:`). Na aba Estudar há "Salvar uma cópia" e "Restaurar uma cópia".
+Grifos, trechos estudados, revisões e as configurações ficam no `localStorage`
+(prefixo `leiseca:`). Em Configurações (ícone de três riscos) há "Salvar uma cópia", "Restaurar uma cópia" e "Apagar lições e revisões".
 
 Fonte dos textos: https://github.com/ctresb/leis. Os textos têm caráter
 informativo e não substituem a publicação oficial.
@@ -40,3 +40,11 @@ informativo e não substituem a publicação oficial.
 
 Para melhorar as perguntas, acrescente pares em `PAIRS` ou artigos em `FAMOSOS`.
 Artigos sem nenhum desses elementos entram só na etapa de leitura da lição.
+
+## Identidade visual
+
+Base comum: verde e ouro, EB Garamond e Forum, filete duplo dourado e o selo.
+Cada código tem uma cor de couro (`LEATHER` em `app.js`), usada na lombada, na página,
+na capa do caderno e na trilha. Cada tela tem sua metáfora: estante (busca), página de
+livro (artigo), caderno e trilha (estudo), folha de prova (questões), certidão (resultado)
+e ficha catalográfica (configurações).
