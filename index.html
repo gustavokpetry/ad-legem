@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-build="10">
+<html lang="pt-BR" data-build="11">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -63,11 +63,10 @@ var pl=JSON.parse(localStorage.getItem('leiseca:palette'));if(pl)d.dataset.palet
   <div class="pg-bar">
     <button class="circ cc" id="sh-close" aria-label="Fechar o artigo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
     <button class="circ" id="sh-fs" aria-label="Mudar o tamanho do texto">A<small>A</small></button>
-    <span class="pg-hint">toque num trecho para grifar</span>
+    <a class="circ ext" id="sh-src" target="_blank" rel="noopener" aria-label="Ver na fonte oficial"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 4.5h6v6M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg></a>
   </div>
   <div class="pg-scroll" id="pg-scroll">
     <div class="pg-inner" id="sh-body"></div>
-    <a class="srclink" id="sh-src" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 4.5h6v6M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg><span>Ver na fonte oficial</span></a>
   </div>
   <nav class="pg-turn" aria-label="Virar a página">
     <button id="sh-prev" class="turn prev"></button>
@@ -79,43 +78,40 @@ var pl=JSON.parse(localStorage.getItem('leiseca:palette'));if(pl)d.dataset.palet
 <div class="settings" id="settings" role="dialog" aria-modal="true" aria-labelledby="set-title" hidden>
   <div class="set-bar"><button class="circ" id="set-close" aria-label="Fechar as configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><h2 id="set-title">Configurações</h2></div>
   <div class="set-scroll">
-    <div class="ficha">
-      <div class="fi-head"><span>AD LEGEM</span><span>FICHA DE PREFERÊNCIAS</span></div>
+    <div class="set-wrap">
+      <h3 class="set-h">Aparência</h3>
+      <div class="set-card">
+        <div class="palettes" role="radiogroup" aria-label="Cores do app"><button role="radio" data-set="palette" data-val="classico" class="pal pal-classico"><span class="pal-dot" aria-hidden="true"></span><span class="pal-n">Clássico</span></button><button role="radio" data-set="palette" data-val="grafite" class="pal pal-grafite"><span class="pal-dot" aria-hidden="true"></span><span class="pal-n">Grafite</span></button><button role="radio" data-set="palette" data-val="marinho" class="pal pal-marinho"><span class="pal-dot" aria-hidden="true"></span><span class="pal-n">Marinho</span></button><button role="radio" data-set="palette" data-val="bordo" class="pal pal-bordo"><span class="pal-dot" aria-hidden="true"></span><span class="pal-n">Bordô</span></button><button role="radio" data-set="palette" data-val="sepia" class="pal pal-sepia"><span class="pal-dot" aria-hidden="true"></span><span class="pal-n">Sépia</span></button></div>
+        <div class="seg" role="radiogroup" aria-label="Tema"><button role="radio" data-set="theme" data-val="auto">Automático</button><button role="radio" data-set="theme" data-val="light">Claro</button><button role="radio" data-set="theme" data-val="dark">Escuro</button></div>
+        <div class="set-row"><span>Texto</span><div class="seg sm" role="radiogroup" aria-label="Tamanho do texto"><button role="radio" data-set="fs" data-val="0">A</button><button role="radio" data-set="fs" data-val="1">A+</button><button role="radio" data-set="fs" data-val="2">A++</button></div></div>
+      </div>
 
-      <section class="fi-sec" aria-labelledby="fs-ap"><h3 id="fs-ap">Aparência</h3>
-        <div class="fi-row"><span class="fi-l">Cores</span><div class="palettes" role="radiogroup" aria-label="Cores do app"><button role="radio" data-set="palette" data-val="classico" class="pal pal-classico"><span class="pal-dot" aria-hidden="true"></span>Clássico</button><button role="radio" data-set="palette" data-val="grafite" class="pal pal-grafite"><span class="pal-dot" aria-hidden="true"></span>Grafite</button><button role="radio" data-set="palette" data-val="marinho" class="pal pal-marinho"><span class="pal-dot" aria-hidden="true"></span>Marinho</button><button role="radio" data-set="palette" data-val="bordo" class="pal pal-bordo"><span class="pal-dot" aria-hidden="true"></span>Bordô</button><button role="radio" data-set="palette" data-val="sepia" class="pal pal-sepia"><span class="pal-dot" aria-hidden="true"></span>Sépia</button></div></div>
-        <div class="fi-row"><span class="fi-l">Tema</span><div class="seg" role="radiogroup" aria-label="Tema"><button role="radio" data-set="theme" data-val="auto">Automático</button><button role="radio" data-set="theme" data-val="light">Claro</button><button role="radio" data-set="theme" data-val="dark">Escuro</button></div></div>
-        <div class="fi-row"><span class="fi-l">Tamanho do texto</span><div class="seg" role="radiogroup" aria-label="Tamanho do texto"><button role="radio" data-set="fs" data-val="0">A</button><button role="radio" data-set="fs" data-val="1">A+</button><button role="radio" data-set="fs" data-val="2">A++</button></div>
-          <p class="fi-prev">Toda pessoa é capaz de direitos e deveres na ordem civil.</p></div>
-      </section>
-
-      <section class="fi-sec" aria-labelledby="fs-le"><h3 id="fs-le">Leitura</h3>
+      <h3 class="set-h">Leitura</h3>
+      <div class="set-card">
         <label class="sw"><span class="sw-t">Ocultar revogados</span><input type="checkbox" role="switch" data-set="hiderev"><span class="knob" aria-hidden="true"></span></label>
         <label class="sw"><span class="sw-t">Notas de redação</span><input type="checkbox" role="switch" data-set="notes"><span class="knob" aria-hidden="true"></span></label>
-      </section>
+      </div>
 
-      <section class="fi-sec" aria-labelledby="fs-gr"><h3 id="fs-gr">Cores dos grifos</h3><label class="mkname"><span class="sw-dot mk-y" aria-hidden="true"></span><span class="vh">Nome da cor amarela</span><input type="text" maxlength="24" data-markname="y" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-g" aria-hidden="true"></span><span class="vh">Nome da cor verde</span><input type="text" maxlength="24" data-markname="g" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-p" aria-hidden="true"></span><span class="vh">Nome da cor rosa</span><input type="text" maxlength="24" data-markname="p" autocomplete="off"></label></section>
+      <h3 class="set-h">Cores dos grifos</h3>
+      <div class="set-card"><label class="mkname"><span class="sw-dot mk-y" aria-hidden="true"></span><span class="vh">Nome da cor amarela</span><input type="text" maxlength="24" data-markname="y" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-g" aria-hidden="true"></span><span class="vh">Nome da cor verde</span><input type="text" maxlength="24" data-markname="g" autocomplete="off"></label><label class="mkname"><span class="sw-dot mk-p" aria-hidden="true"></span><span class="vh">Nome da cor rosa</span><input type="text" maxlength="24" data-markname="p" autocomplete="off"></label></div>
 
-      <section class="fi-sec" aria-labelledby="fs-es"><h3 id="fs-es">Estudo</h3>
-        <div class="fi-row"><span class="fi-l">Questões por lição</span><div class="seg" role="radiogroup" aria-label="Questões por lição"><button role="radio" data-set="qmax" data-val="5">5</button><button role="radio" data-set="qmax" data-val="8">8</button><button role="radio" data-set="qmax" data-val="10">10</button></div></div>
+      <h3 class="set-h">Estudo</h3>
+      <div class="set-card">
+        <div class="set-row"><span>Questões por lição</span><div class="seg sm" role="radiogroup" aria-label="Questões por lição"><button role="radio" data-set="qmax" data-val="5">5</button><button role="radio" data-set="qmax" data-val="8">8</button><button role="radio" data-set="qmax" data-val="10">10</button></div></div>
         <label class="sw"><span class="sw-t">Pergunta “Qual é o artigo?”</span><input type="checkbox" role="switch" data-set="qartigo"><span class="knob" aria-hidden="true"></span></label>
-      </section>
+      </div>
 
-      <section class="fi-sec" aria-labelledby="fs-da"><h3 id="fs-da">Seus dados</h3>
-        <p class="fi-note">Ficam só neste aparelho.</p>
-        <div class="fi-btns">
-          <button class="go" id="bk-save">Salvar cópia</button>
-          <button class="go ghost" id="bk-load">Restaurar</button>
+      <h3 class="set-h">Seus dados</h3>
+      <div class="set-card">
+        <div class="set-btns">
+          <button class="go" id="bk-save"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg><span>Salvar cópia</span></button>
+          <button class="go ghost" id="bk-load"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 19.5h14"/></svg><span>Restaurar</span></button>
           <input type="file" id="bk-file" accept="application/json,.json" hidden>
         </div>
-        <button class="danger-link" id="bk-reset">Apagar progresso</button>
-      </section>
+        <button class="danger-link" id="bk-reset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg><span>Apagar progresso</span></button>
+      </div>
 
-      <section class="fi-sec" aria-labelledby="fs-so"><h3 id="fs-so">Sobre</h3>
-        <p class="fi-note">Leis de <span id="set-date"></span> · não substitui o Diário Oficial.</p>
-        <p class="fi-note">Ad Legem · versão 2026.10</p>
-      </section>
-      <span class="hole" aria-hidden="true"></span>
+      <p class="set-about">Leis de <span id="set-date"></span> · não substitui o Diário Oficial<br>Ad Legem · versão 2026.10</p>
     </div>
   </div>
 </div>
@@ -124,7 +120,7 @@ var pl=JSON.parse(localStorage.getItem('leiseca:palette'));if(pl)d.dataset.palet
   <div class="ms-panel" role="dialog" aria-modal="true" aria-labelledby="ms-title">
     <div class="ms-k">GRIFAR</div><div class="ms-t" id="ms-title"></div>
     <div class="ms-colors" id="ms-colors"></div>
-    <div class="ms-row"><button class="danger-link" id="ms-remove">Remover grifo</button><button class="ms-cancel" id="ms-cancel">Cancelar</button></div>
+    <div class="ms-row"><button class="danger-link" id="ms-remove"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg><span>Remover</span></button><button class="ms-cancel" id="ms-cancel">Cancelar</button></div>
   </div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

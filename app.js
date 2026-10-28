@@ -5,7 +5,7 @@
 'use strict';
 // HTML e JS precisam ser da mesma versão. Se o cache juntou versões diferentes, limpa só o
 // cache de arquivos (o progresso fica no localStorage e não é tocado) e recarrega uma vez.
-const BUILD='10';
+const BUILD='11';
 if(document.documentElement.dataset.build!==BUILD){
   let tried=false; try{ tried=sessionStorage.getItem('adl-fix')===BUILD; sessionStorage.setItem('adl-fix',BUILD); }catch(e){}
   if(!tried){
@@ -89,6 +89,9 @@ const sentence=t=>cap1(t.toLowerCase());
 const plainTxt=t=>t.replace(/\*\([^)]*\)\*/g,'').replace(/\*+/g,'').replace(/[ \t]+/g,' ').trim();
 const LABEL_RE=/^(?:[IVXLC]+\s*[-–—]\s*|§\s*\d+º?\.?\s*|Parágrafo único\.?\s*|[a-z]\)\s*)/i;
 const isRevokedBlock=raw=>{ const b=raw.replace(/\*+/g,'').trim().replace(LABEL_RE,'').trim(); return !b || /^\(?\s*(revogad|vetad)/i.test(b) || !plainTxt(raw).replace(LABEL_RE,'').trim(); };
+// notas entre parênteses que não são texto da norma ("Vide Lei…", "Redação dada…")
+const NOTE_RE=/\s*\((?=[^()]*(?:Redação|Incluíd|Acrescid|Revogad|Renumerad|Vide|DOU|Lei nº|Emenda Constitucional|Vigência|Regulamento|Vetad|ADI|ADC|ADPF))[^()]*\)/g;
+const normText=raw=>plainTxt(raw).replace(NOTE_RE,'').replace(LABEL_RE,'').trim();
 function clip(s,n){ if(s.length<=n) return s; const c=s.lastIndexOf(' ',n); return s.slice(0,c>40?c:n)+'…'; }
 const ROMANS=['','I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV'];
 const roman=n=>ROMANS[n]||String(n);
@@ -152,6 +155,16 @@ function articleHTML(a, item, titleId){
     <div class="lexpage">${body.html}</div>
     ${body.notes.length?`<div class="footnotes">${body.notes.map((t,i)=>`<p><sup>${i+1}</sup> ${esc(t)}</p>`).join('')}</div>`:''}`;
 }
+
+/* ícones (traço simples, herdam a cor do texto) */
+const ICON={
+  book:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 5.5c3-1 6-1 8.5.8 2.5-1.8 5.5-1.8 8.5-.8v13c-3-1-6-1-8.5.8-2.5-1.8-5.5-1.8-8.5-.8z"/><path d="M12 6.3v13"/></svg>',
+  copy:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8.5" y="8.5" width="11" height="11" rx="1.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>',
+  clock:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  left:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+  arrow:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  hl:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.5l4 4-9 9H6.5v-4z"/><path d="M4 21h16"/><path d="M13 7l4 4"/></svg>',
+};
 
 /* ---------- busca ---------- */
 let indexed=false;
@@ -228,7 +241,7 @@ function artCard(a,toks){
   return `<button class="art${a.r?' rev':''}" data-id="${esc(a.id)}" aria-label="${esc(label)}" style="--cc:${cc(a.c)}">
     <span class="mg" aria-hidden="true"><span class="chip">${CODE[a.c].sigla}</span><span class="an">${esc(a.n)}</span></span>
     <span aria-hidden="true">${a.h?`<span class="where">${esc(lastHead(a.h))}</span>`:''}
-    <span class="snip">${snippet(a,toks||[])}</span>${a.r||hasMarks(a.id)?`<span class="tag">${a.r?'revogado':''}${a.r&&hasMarks(a.id)?' · ':''}${hasMarks(a.id)?'grifado':''}</span>`:''}</span></button>`;
+    <span class="snip">${snippet(a,toks||[])}</span>${a.r||hasMarks(a.id)?`<span class="tag">${a.r?'revogado':''}${hasMarks(a.id)?`<span class="tag-hl" title="grifado">${ICON.hl}</span>`:''}</span>`:''}</span></button>`;
 }
 let page=1, lastList=[], lastToks=[], lastHead_='';
 function renderList(list,toks,head){
@@ -301,6 +314,7 @@ function openArt(a){
   setSave();
   $('#pg-scroll').scrollTop=0;
   if(first){
+    if(!store.get('hintMark',false)){ store.set('hintMark',true); setTimeout(()=>toast('Toque num trecho para grifar.'),400); }
     $('#sheet').hidden=false; document.body.style.overflow='hidden';
     BACKDROP.forEach(s=>{ const el=$(s); if(el) el.inert=true; });
     $('#sh-close').focus({preventScroll:true});
@@ -513,10 +527,10 @@ function renderTrack(scroll){
     const done=lessonDone(l), isNext=nx&&nx.i===l.i;
     if(isNext) return msHTML+`<li class="node next"><span class="dot" aria-hidden="true">${l.i+1}</span>
       <div class="nextcard"><div class="nc-k">PRÓXIMA · LIÇÃO ${l.i+1}</div><div class="nc-t">${esc(l.title)}</div>
-      <div class="nc-m">${esc(l.range)} · cerca de ${l.minutes} min · ler e responder</div>
+      <div class="nc-m">${esc(l.range)} · ${l.minutes} min</div>
       <button class="nc-go" data-start="${t.id}|${l.i}">Começar lição</button></div></li>`;
     return msHTML+`<li class="node${done?' done':''}"><span class="dot" aria-hidden="true">${done?CHECK_ICON:l.i+1}</span>
-      <button class="nd-b" data-start="${t.id}|${l.i}"><span class="nd-t">${esc(l.title)}</span><span class="nd-m">Lição ${l.i+1} · ${esc(l.range)}${done?' · concluída':` · ${l.minutes} min`}</span></button></li>`;
+      <button class="nd-b" data-start="${t.id}|${l.i}"><span class="nd-t">${esc(l.title)}</span><span class="nd-m">${esc(l.range)}${done?'':` · ${l.minutes} min`}</span></button></li>`;
   }).join('');
   $('#trackview').innerHTML=`<header class="trackhead" style="--cc:${cc(t.c)}">
       <button class="circ light" id="tr-back" aria-label="Voltar ao caderno">${BACK_ICON}</button>
@@ -580,15 +594,15 @@ function renderSession(){
     const dots=S.items.map((_,i)=>`<i class="${i<=S.ri?'on':''}"></i>`).join('');
     el.innerHTML=sessionHead()+`<div class="readprog"><span>LEITURA ${roman(S.ri+1)} DE ${roman(S.items.length)}</span><span class="rdots" aria-hidden="true">${dots}</span></div>
       <article class="leaf" style="--cc:${cc(a.c)}">${articleHTML(a,it)}</article>
-      <div class="actions">${S.ri>0?`<button class="go ghost" id="rd-prev">Anterior</button>`:''}
-        <button class="go" id="rd-next">${!last?'Próximo artigo':S.qs.length?`Ir para a prova (${S.qs.length} ${S.qs.length===1?'questão':'questões'})`:'Concluir lição'}</button></div>`;
+      <div class="actions">${S.ri>0?`<button class="go ghost icon" id="rd-prev" aria-label="Artigo anterior">${ICON.left}</button>`:''}
+        <button class="go" id="rd-next">${!last?`Próximo ${ICON.arrow}`:S.qs.length?`Ir para a prova (${S.qs.length} ${S.qs.length===1?'questão':'questões'})`:'Concluir lição'}</button></div>`;
     $('#rd-next').focus({preventScroll:true});
     return;
   }
   if(S.phase==='quiz'){
     const q=S.qs[S.qi], ans=S.answers[S.qi];
     el.innerHTML=sessionHead()+answerSheet()+questionHTML(q,ans,S.qi)+
-      (ans?`<div class="actions"><button class="go" id="q-next">${S.qi<S.qs.length-1?'Próxima questão':'Ver resultado'}</button></div>`:'');
+      (ans?`<div class="actions"><button class="go" id="q-next">${S.qi<S.qs.length-1?`Próxima ${ICON.arrow}`:'Ver resultado'}</button></div>`:'');
     (ans?$('#q-next'):el.querySelector('[data-v]')).focus({preventScroll:true});
     if(ans){ const fb=el.querySelector('.fb'); if(fb) requestAnimationFrame(()=>fb.scrollIntoView({block:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})); }
     return;
@@ -621,7 +635,7 @@ function questionHTML(q,ans,i){
   const fb = ans ? `<div class="fb ${ans.ok?'ok':'no'}" role="status"><b>${ans.ok?'Correto.':'Não é isso.'}</b> ${
       q.type==='vf' ? (q.truth?'O trecho está exatamente como na lei.':`A lei diz «${esc(q.right)}», não «${esc(q.shown)}».`)
       : q.type==='lacuna' ? `A palavra da lei é «${esc(q.right)}».` : `É o ${esc(q.right)}.`}
-      ${art?` <button class="linkbtn" data-art="${esc(art.id)}">Ler o artigo inteiro</button>`:''}</div>` : '';
+      ${art?` <button class="linkbtn" data-art="${esc(art.id)}">${ICON.book}<span>Artigo</span></button>`:''}</div>` : '';
   return `<section class="question" style="--cc:${cc(q.c)}" aria-label="Questão ${i+1}">
     <div class="rule-label q"><h2>QUESTÃO ${roman(i+1)}</h2></div><p class="qinst">${inst}</p>
     <div class="qitem"><span class="qn" aria-hidden="true">${i+1}</span><div>${item}</div></div>${opts}${fb}</section>`;
@@ -704,15 +718,15 @@ function markList(){
 const filteredMarks=()=>markList().filter(m=>(GF.color==='*'||m.c===GF.color)&&(GF.code==='*'||m.a.c===GF.code));
 function clipHTML(m){
   const raw=m.a.t.split(/\n{2,}/)[m.bi]||'';
-  const text=plainTxt(raw).replace(LABEL_RE,'').trim();
+  const text=normText(raw);
   const where=citation(m.a,m.bi).replace(/^[^,]+,\s*art\./,'Art.');
   return `<article class="clip" style="--cc:${cc(m.a.c)}">
     <div class="cl-h"><span class="chip">${esc(CODE[m.a.c].sigla)}</span><b>${esc(where)}</b>${m.at?`<span class="cl-d">${fmtDate(m.at)}</span>`:''}</div>
     <p class="cl-t"><span class="mk mk-${m.c}">${esc(text)}</span></p>
     <div class="cl-a">
-      <button data-gact="open" data-k="${esc(m.k)}">Abrir artigo</button>
-      <button data-gact="copy" data-k="${esc(m.k)}">Copiar citação</button>
-      <button data-gact="edit" data-k="${esc(m.k)}" aria-label="${esc(markNames[m.c])}: trocar cor ou remover"><span class="sw-dot mk-${m.c}" aria-hidden="true"></span>${esc(markNames[m.c])}</button>
+      <button data-gact="open" data-k="${esc(m.k)}" aria-label="Abrir o artigo" title="Abrir o artigo">${ICON.book}</button>
+      <button data-gact="copy" data-k="${esc(m.k)}" aria-label="Copiar citação" title="Copiar citação">${ICON.copy}</button>
+      <button data-gact="edit" data-k="${esc(m.k)}" aria-label="${esc(markNames[m.c])}: trocar cor ou remover" title="${esc(markNames[m.c])}"><span class="sw-dot mk-${m.c}" aria-hidden="true"></span></button>
     </div></article>`;
 }
 function renderGrifos(){
@@ -734,7 +748,7 @@ function renderGrifos(){
   $('#v-grifos').innerHTML=`<h1 class="studyh">Grifos</h1>
     ${all.length?`<p class="gf-count">${all.length} ${all.length===1?'trecho grifado':'trechos grifados'}</p>
     <div class="gf-ctrl">
-      <div class="seg sm" role="radiogroup" aria-label="Ordem">${['lei','rec'].map(v=>`<button role="radio" data-gf="sort" data-val="${v}" aria-checked="${GF.sort===v}">${v==='lei'?'Ordem da lei':'Recentes'}</button>`).join('')}</div>
+      <div class="seg sm" role="radiogroup" aria-label="Ordem">${['lei','rec'].map(v=>`<button role="radio" data-gf="sort" data-val="${v}" aria-checked="${GF.sort===v}" aria-label="${v==='lei'?'Ordem da lei':'Mais recentes'}" title="${v==='lei'?'Ordem da lei':'Mais recentes'}">${v==='lei'?'<span class="sym">§</span>':ICON.clock}</button>`).join('')}</div>
       <div class="fchips" role="group" aria-label="Filtrar por cor">${chip('color','*','Todas',GF.color==='*')}${MARK_COLORS.map(c=>chip('color',c,esc(markNames[c]),GF.color===c,`<span class="sw-dot mk-${c}" aria-hidden="true"></span>`)).join('')}</div>
       ${codes.length>1?`<div class="fchips" role="group" aria-label="Filtrar por código">${chip('code','*','Todos',GF.code==='*')}${codes.map(c=>chip('code',c,esc(CODE[c].sigla),GF.code===c)).join('')}</div>`:''}
     </div>`:''}
@@ -749,7 +763,7 @@ $('#v-grifos').addEventListener('click',async e=>{
   if(b.dataset.gact==='open'){ openArt(a); requestAnimationFrame(()=>{ const el=$(`#sh-body [data-b="${bi}"]`); if(el) el.scrollIntoView({block:'center'}); }); }
   else if(b.dataset.gact==='edit') openMarkSheet(a,bi,renderGrifos);
   else if(b.dataset.gact==='copy'){
-    const txt=`“${plainTxt(a.t.split(/\n{2,}/)[bi]||'').replace(LABEL_RE,'').trim()}” (${citation(a,bi)})`;
+    const txt=`“${normText(a.t.split(/\n{2,}/)[bi]||'')}” (${citation(a,bi)})`;
     try{ await navigator.clipboard.writeText(txt); toast('Citação copiada.'); }catch(err){ toast('Não foi possível copiar.'); }
   }
 });
