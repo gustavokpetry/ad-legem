@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-build="6">
+<html lang="pt-BR" data-build="7">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -87,29 +87,28 @@ if(t)d.dataset.theme=t;if(t?t==='dark':matchMedia('(prefers-color-scheme: dark)'
       </section>
 
       <section class="fi-sec" aria-labelledby="fs-le"><h3 id="fs-le">Leitura</h3>
-        <label class="sw"><span class="sw-t">Ocultar revogados<small>Esconde artigos e parágrafos revogados da busca e da leitura.</small></span><input type="checkbox" role="switch" data-set="hiderev"><span class="knob" aria-hidden="true"></span></label>
-        <label class="sw"><span class="sw-t">Notas de redação<small>Mostra, no rodapé do artigo, qual lei deu a redação atual.</small></span><input type="checkbox" role="switch" data-set="notes"><span class="knob" aria-hidden="true"></span></label>
+        <label class="sw"><span class="sw-t">Ocultar revogados</span><input type="checkbox" role="switch" data-set="hiderev"><span class="knob" aria-hidden="true"></span></label>
+        <label class="sw"><span class="sw-t">Notas de redação</span><input type="checkbox" role="switch" data-set="notes"><span class="knob" aria-hidden="true"></span></label>
       </section>
 
       <section class="fi-sec" aria-labelledby="fs-es"><h3 id="fs-es">Estudo</h3>
         <div class="fi-row"><span class="fi-l">Questões por lição</span><div class="seg" role="radiogroup" aria-label="Questões por lição"><button role="radio" data-set="qmax" data-val="5">5</button><button role="radio" data-set="qmax" data-val="8">8</button><button role="radio" data-set="qmax" data-val="10">10</button></div></div>
-        <label class="sw"><span class="sw-t">“Qual é o artigo?”<small>Inclui, nos artigos mais conhecidos, a pergunta sobre o número do artigo.</small></span><input type="checkbox" role="switch" data-set="qartigo"><span class="knob" aria-hidden="true"></span></label>
-        <p class="fi-note">Em cada lição você lê alguns artigos e faz uma prova curta sobre eles. O que errar volta no dia seguinte na revisão; o que acertar volta em alguns dias, cada vez mais espaçado. As questões são geradas automaticamente a partir do texto da lei.</p>
+        <label class="sw"><span class="sw-t">Pergunta “Qual é o artigo?”</span><input type="checkbox" role="switch" data-set="qartigo"><span class="knob" aria-hidden="true"></span></label>
       </section>
 
       <section class="fi-sec" aria-labelledby="fs-da"><h3 id="fs-da">Seus dados</h3>
-        <p class="fi-note">O progresso e os grifos ficam só neste aparelho. Salve uma cópia de vez em quando, ou para passar para outro celular.</p>
+        <p class="fi-note">Ficam só neste aparelho.</p>
         <div class="fi-btns">
-          <button class="go" id="bk-save">Salvar uma cópia</button>
-          <button class="go ghost" id="bk-load">Restaurar uma cópia</button>
+          <button class="go" id="bk-save">Salvar cópia</button>
+          <button class="go ghost" id="bk-load">Restaurar</button>
           <input type="file" id="bk-file" accept="application/json,.json" hidden>
         </div>
-        <button class="danger-link" id="bk-reset">Apagar lições e revisões</button>
+        <button class="danger-link" id="bk-reset">Apagar progresso</button>
       </section>
 
       <section class="fi-sec" aria-labelledby="fs-so"><h3 id="fs-so">Sobre</h3>
-        <p class="fi-note">Texto das leis de <span id="set-date"></span>, compilado a partir das publicações oficiais. Os textos têm caráter informativo e não substituem a publicação no Diário Oficial: confira sempre a fonte oficial antes de citar.</p>
-        <p class="fi-note">Ad Legem · versão 2026.10 · fontes EB Garamond e Forum (SIL Open Font License).</p>
+        <p class="fi-note">Leis de <span id="set-date"></span> · não substitui o Diário Oficial.</p>
+        <p class="fi-note">Ad Legem · versão 2026.10</p>
       </section>
       <span class="hole" aria-hidden="true"></span>
     </div>

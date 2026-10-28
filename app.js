@@ -5,7 +5,7 @@
 'use strict';
 // HTML e JS precisam ser da mesma versão. Se o cache juntou versões diferentes, limpa só o
 // cache de arquivos (o progresso fica no localStorage e não é tocado) e recarrega uma vez.
-const BUILD='6';
+const BUILD='7';
 if(document.documentElement.dataset.build!==BUILD){
   let tried=false; try{ tried=sessionStorage.getItem('adl-fix')===BUILD; sessionStorage.setItem('adl-fix',BUILD); }catch(e){}
   if(!tried){
