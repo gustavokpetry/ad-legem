@@ -1,6 +1,11 @@
-// Ad Legem — funciona offline. Ao atualizar o index.html, aumente a versão abaixo.
-const VERSION = 'ad-legem-v2';
-const CORE = ['./', './index.html', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
+// Ad Legem — service worker: deixa o app funcionando offline.
+// Ao publicar mudanças, aumente VERSION (ad-legem-v4, v5…) para limpar o cache antigo.
+const VERSION = 'ad-legem-v3';
+const CORE = [
+  './', './index.html', './styles.css', './app.js', './data.json', './manifest.webmanifest',
+  './seal.svg', './icon.svg', './icon-192.png', './icon-512.png', './apple-touch-icon.png',
+  './fonts/ebgaramond.woff2', './fonts/ebgaramond-italic.woff2', './fonts/forum.woff2'
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -10,15 +15,17 @@ self.addEventListener('activate', e => {
     .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
-// Mostra a cópia salva na hora e busca a versão nova em segundo plano.
+// Responde com a cópia salva na hora e atualiza o cache em segundo plano.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   e.respondWith(caches.open(VERSION).then(async cache => {
-    const hit = await cache.match(e.request, { ignoreSearch: true });
-    const net = fetch(e.request).then(res => {
-      if (res && (res.ok || res.type === 'opaque')) cache.put(e.request, res.clone());
+    const hit = await cache.match(req, { ignoreSearch: true });
+    const net = fetch(req).then(res => {
+      if (res && res.ok) cache.put(req, res.clone());
       return res;
-    }).catch(() => hit);
-    return hit || net;
+    }).catch(() => hit || Response.error());
+    if (hit) { e.waitUntil(net.catch(() => {})); return hit; }
+    return net;
   }));
 });
