@@ -17,7 +17,7 @@ Funciona offline e pode ser instalado na tela inicial. Publicado no GitHub Pages
 ## Atualizar o texto das leis
 
 1. `python3 scripts/gerar_dados.py` (só precisa do Python 3, sem bibliotecas extras)
-2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v8` → `ad-legem-v9`)
+2. No `sw.js`, aumente `VERSION` (ex.: `ad-legem-v10` → `ad-legem-v11`)
 3. Faça o commit de `data.json` e `sw.js`
 
 Para incluir outra lei, acrescente uma linha em `CODIGOS` no script.

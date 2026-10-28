@@ -440,3 +440,5 @@ main.wrap{padding-bottom:40px}
 .mkname input{flex:1;min-width:0;border:0;border-bottom:1px solid var(--rule);background:transparent;padding:8px 2px;font-family:var(--serif);font-size:1.02rem;border-radius:0}
 .mkname input:focus{outline:none;border-bottom-color:var(--gold)}
 @media (prefers-reduced-motion:reduce){.lexpage .blk{transition:none}}
+
+.gf-end{margin-top:18px;padding-top:16px;border-top:1px solid var(--rule)}

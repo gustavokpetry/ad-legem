@@ -5,7 +5,7 @@
 'use strict';
 // HTML e JS precisam ser da mesma versão. Se o cache juntou versões diferentes, limpa só o
 // cache de arquivos (o progresso fica no localStorage e não é tocado) e recarrega uma vez.
-const BUILD='8';
+const BUILD='10';
 if(document.documentElement.dataset.build!==BUILD){
   let tried=false; try{ tried=sessionStorage.getItem('adl-fix')===BUILD; sessionStorage.setItem('adl-fix',BUILD); }catch(e){}
   if(!tried){
@@ -739,7 +739,7 @@ function renderGrifos(){
       ${codes.length>1?`<div class="fchips" role="group" aria-label="Filtrar por código">${chip('code','*','Todos',GF.code==='*')}${codes.map(c=>chip('code',c,esc(CODE[c].sigla),GF.code===c)).join('')}</div>`:''}
     </div>`:''}
     <div class="clips">${body}</div>
-    ${shown.length?`<div class="actions"><button class="go" id="gf-practice">Praticar ${shown.length===1?'este grifo':`estes ${shown.length} grifos`}</button></div>`:''}`;
+    ${shown.length?`<div class="actions static gf-end"><button class="go" id="gf-practice">Praticar ${shown.length===1?'este grifo':`estes ${shown.length} grifos`}</button></div>`:''}`;
 }
 $('#v-grifos').addEventListener('click',async e=>{
   const f=e.target.closest('[data-gf]'); if(f){ GF[f.dataset.gf]=f.dataset.val; renderGrifos(); return; }
